@@ -1,16 +1,16 @@
-// eslint.config.js
+// eslint.config.ts
 
 // 🧱 Core ESLint rules
-import js from '@eslint/js'
+import js from '@eslint/js';
 
 // 🌐 Predefined global variables (like `window`, `document`, etc.)
-import globals from 'globals'
+import globals from 'globals';
 
 // ⚛️ React-specific hooks rules
-import reactHooks from 'eslint-plugin-react-hooks'
+import reactHooks from 'eslint-plugin-react-hooks';
 
 // 🔄 React Fast Refresh for Vite/Next.js HMR safety
-import reactRefresh from 'eslint-plugin-react-refresh'
+import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
   // ❌ Ignore build output
@@ -21,7 +21,7 @@ export default [
     files: ['**/*.{js,jsx}'],
 
     languageOptions: {
-      ecmaVersion: 2020, // or 'latest'
+      ecmaVersion: 2020,
       globals: globals.browser,
       parserOptions: {
         ecmaVersion: 'latest',
@@ -30,14 +30,12 @@ export default [
       },
     },
 
-    // 🔌 Plugins must be imported explicitly
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
     },
 
     rules: {
-      // ✅ Start with recommended rules
       ...js.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
 
@@ -51,4 +49,4 @@ export default [
       ],
     },
   },
-]
+];
