@@ -1,0 +1,29 @@
+/* This file styles the content ONLY when printing */
+
+@media print {
+  /* Hide every element on the page by default */
+  body > * {
+    display: none !important;
+  }
+
+  /* Make only the print container and its children visible */
+  #print-thermal-container, #print-thermal-container * {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Position the print container at the top-left of the page */
+  #print-thermal-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
+
+/* Define the page size for a standard 3-inch (80mm) thermal printer. */
+/* 'auto' for the height allows it to be as long as needed. */
+@page {
+  size: 80mm auto; 
+  margin: 2mm; /* A small margin for the printer */
+}

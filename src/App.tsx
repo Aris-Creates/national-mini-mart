@@ -1,18 +1,42 @@
-// src/App.jsx
-import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './hooks/useAuth';
+
+import LoginPage from './pages/login';
+import PosPage from './pages/pos';
+import ProductsPage from './pages/products';
+import InventoryPage from './pages/inventory';
+import CustomersPage from './pages/customers';
+import SalesPage from './pages/sales';
+import ReportsPage from './pages/reports';
+import Layout from './components/layout/Layout';
+import { JSX } from 'react';
+
+function ProtectedRoute({ children }: { children: JSX.Element }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return <div>Loading...</div>; // Or a proper loader component
+  }
+  return user ? children : <Navigate to="/login" />;
+}
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-md text-center">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">
-          Welcome to React + Tailwind!
-        </h1>
-        <p className="text-gray-600">
-          This is your default <code>App.jsx</code> using Tailwind CSS.
-        </p>
-      </div>
-    </div>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="/pos" />} />
+            <Route path="pos" element={<PosPage />} />
+            <Route path="products" element={<ProductsPage />} />
+            <Route path="inventory" element={<InventoryPage />} />
+            <Route path="customers" element={<CustomersPage />} />
+            <Route path="sales" element={<SalesPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+          </Route>
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 
