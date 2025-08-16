@@ -4,6 +4,7 @@ export interface SaleItem {
   productId: string;
   productName: string;
   quantity: number;
+  mrp: number; 
   priceAtSale: number;
 }
 
@@ -24,5 +25,4 @@ export interface Sale {
   loyaltyPointsUsed: number;
   soldAt: Timestamp;
   soldBy: string;
-  
 }

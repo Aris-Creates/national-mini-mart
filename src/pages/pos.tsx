@@ -1,5 +1,3 @@
-// src/pages/PosPage.tsx
-
 import { useState, useRef, useMemo } from 'react';
 import { collection, writeBatch, doc, serverTimestamp, increment, Timestamp, query, where, getDocs, limit, DocumentData } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -14,11 +12,14 @@ import { ProductSearch } from '../components/pos/ProductSearch';
 import { ShoppingCart } from '../components/pos/ShoppingCart';
 
 const GST_RATE = 0.18;
+const LOYALTY_POINT_VALUE = 5; // 1 point = 5 currency units
+
 const docToProduct = (doc: DocumentData): Product => ({
   id: doc.id,
   name: doc.data().name || '',
   barcode: doc.data().barcode || '',
   mrp: doc.data().mrp || 0,
+  discountPrice: doc.data().discountPrice,
   stock: doc.data().stock || 0,
   createdAt: doc.data().createdAt as Timestamp,
   updatedAt: doc.data().updatedAt as Timestamp,
@@ -32,15 +33,30 @@ export default function PosPage() {
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
-  const [discount, setDiscount] = useState(0);
+  const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0);
   const [saleKey, setSaleKey] = useState(1);
 
-  const { subTotal, gstAmount, totalAmount } = useMemo(() => {
+  const { subTotal, totalDiscount, gstAmount, totalAmount, loyaltyDiscount } = useMemo(() => {
     const sub = cart.reduce((acc, item) => acc + item.priceAtSale * item.quantity, 0);
+    const discount = cart.reduce((acc, item) => acc + (item.mrp - item.priceAtSale) * item.quantity, 0);
     const gst = sub * GST_RATE;
-    const preRoundTotal = sub + gst - discount;
-    return { subTotal: sub, gstAmount: gst, totalAmount: Math.round(preRoundTotal) };
-  }, [cart, discount]);
+    const totalBeforeLoyalty = sub + gst;
+
+    const maxPointsValue = Math.floor(totalBeforeLoyalty);
+    const maxPointsCanUse = selectedCustomer ? Math.min(selectedCustomer.loyaltyPoints, Math.floor(maxPointsValue / LOYALTY_POINT_VALUE)) : 0;
+    const actualPointsToUse = Math.max(0, Math.min(loyaltyPointsToUse, maxPointsCanUse));
+    const lDiscount = actualPointsToUse * LOYALTY_POINT_VALUE;
+
+    const preRoundTotal = totalBeforeLoyalty - lDiscount;
+    
+    return { 
+        subTotal: sub, 
+        totalDiscount: discount,
+        gstAmount: gst,
+        loyaltyDiscount: lDiscount,
+        totalAmount: Math.round(preRoundTotal) 
+    };
+  }, [cart, selectedCustomer, loyaltyPointsToUse]);
 
   const handleAddToCart = (product: Product) => {
     if (product.stock <= 0) {
@@ -55,7 +71,16 @@ export default function PosPage() {
       }
       setCart(cart.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item));
     } else {
-      setCart([...cart, { productId: product.id, productName: product.name, quantity: 1, priceAtSale: product.mrp }]);
+      const priceAtSale = (product.discountPrice && product.discountPrice > 0 && product.discountPrice < product.mrp) 
+                              ? product.discountPrice 
+                              : product.mrp;
+      setCart([...cart, { 
+        productId: product.id, 
+        productName: product.name, 
+        quantity: 1, 
+        mrp: product.mrp,
+        priceAtSale: priceAtSale
+      }]);
     }
   };
 
@@ -86,9 +111,18 @@ export default function PosPage() {
   const handleConfirmCheckout = async (paymentDetails: { paymentMode: 'Cash' | 'Card' | 'UPI', amountReceived: number | '' }) => {
     if (cart.length === 0 || isSubmitting) return;
 
+    // Recalculate finals to ensure data integrity on submission
     const finalSubTotal = cart.reduce((acc, item) => acc + item.priceAtSale * item.quantity, 0);
+    const finalDiscount = cart.reduce((acc, item) => acc + (item.mrp - item.priceAtSale) * item.quantity, 0);
     const finalGstAmount = finalSubTotal * GST_RATE;
-    const preRoundTotal = finalSubTotal + finalGstAmount - discount;
+    const totalBeforeLoyalty = finalSubTotal + finalGstAmount;
+
+    const maxPointsValue = Math.floor(totalBeforeLoyalty);
+    const maxPointsCanUse = selectedCustomer ? Math.min(selectedCustomer.loyaltyPoints, Math.floor(maxPointsValue / LOYALTY_POINT_VALUE)) : 0;
+    const finalLoyaltyPointsUsed = Math.max(0, Math.min(loyaltyPointsToUse, maxPointsCanUse));
+    const finalLoyaltyDiscount = finalLoyaltyPointsUsed * LOYALTY_POINT_VALUE;
+    
+    const preRoundTotal = totalBeforeLoyalty - finalLoyaltyDiscount;
     const finalTotalAmount = Math.round(preRoundTotal);
     const roundOffAmount = finalTotalAmount - preRoundTotal;
 
@@ -107,7 +141,7 @@ export default function PosPage() {
         customerName: selectedCustomer?.name || walkInName.trim() || 'Walk-in Customer',
         ...(selectedCustomer && { customerId: selectedCustomer.id }),
         subTotal: finalSubTotal,
-        discount: discount,
+        discount: finalDiscount,
         gst: finalGstAmount,
         roundOff: roundOffAmount,
         totalAmount: finalTotalAmount,
@@ -115,7 +149,7 @@ export default function PosPage() {
         amountReceived: paymentDetails.paymentMode === 'Cash' ? Number(paymentDetails.amountReceived) : finalTotalAmount,
         changeGiven: paymentDetails.paymentMode === 'Cash' ? Math.max(0, Number(paymentDetails.amountReceived) - finalTotalAmount) : 0,
         loyaltyPointsEarned: selectedCustomer ? Math.floor(finalTotalAmount / 100) : 0,
-        loyaltyPointsUsed: 0,
+        loyaltyPointsUsed: finalLoyaltyPointsUsed,
         soldAt: serverTimestamp(),
         soldBy: user?.email || user?.uid || 'System',
       };
@@ -130,7 +164,8 @@ export default function PosPage() {
       
       if (selectedCustomer) {
         const customerRef = doc(db, "customers", selectedCustomer.id);
-        batch.update(customerRef, { loyaltyPoints: increment(saleDataForFirebase.loyaltyPointsEarned), updatedAt: serverTimestamp() });
+        const pointsChange = saleDataForFirebase.loyaltyPointsEarned - saleDataForFirebase.loyaltyPointsUsed;
+        batch.update(customerRef, { loyaltyPoints: increment(pointsChange), updatedAt: serverTimestamp() });
       }
 
       await batch.commit();
@@ -138,8 +173,6 @@ export default function PosPage() {
       const finalSaleObject: Sale = { ...saleDataForFirebase, id: saleRef.id, soldAt: Timestamp.now() };
       setLastSale(finalSaleObject);
       setCart([]);
-
-      // --- CHANGE: Refresh the ProductSearch component immediately upon sale completion ---
       setSaleKey(prevKey => prevKey + 1);
 
     } catch (err) {
@@ -154,12 +187,10 @@ export default function PosPage() {
   const handleDownloadPdf = () => { if (receiptRef.current && lastSale) downloadPdfReceipt(receiptRef.current, `receipt-${lastSale.billNumber}.pdf`); };
 
   const handleNewSale = () => {
-    // This function now just resets the cart/sale state.
-    // The ProductSearch refresh has already happened.
     setLastSale(null);
     setSelectedCustomer(null);
     setWalkInName('');
-    setDiscount(0);
+    setLoyaltyPointsToUse(0);
   };
 
   return (
@@ -188,13 +219,18 @@ export default function PosPage() {
           onSelectCustomer={setSelectedCustomer}
           walkInName={walkInName}
           setWalkInName={setWalkInName}
-          discount={discount}
-          onDiscountChange={setDiscount}
+          subTotal={subTotal}
+          totalDiscount={totalDiscount}
+          gstAmount={gstAmount}
+          loyaltyDiscount={loyaltyDiscount}
+          totalAmount={totalAmount}
+          loyaltyPointsToUse={loyaltyPointsToUse}
+          onLoyaltyPointsChange={setLoyaltyPointsToUse}
         />
       </main>
 
       <div className="hidden">
-        {lastSale && <ThermalLayout ref={receiptRef} sale={lastSale} storeDetails={{ name: "The Corner Store", address: "123 Main St", phone: "555-123-4567" }}/>}
+        {lastSale && <ThermalLayout ref={receiptRef} sale={lastSale} storeDetails={{ name: "National Mini Mart", address: "123 Main St", phone: "555-123-4567" }}/>}
       </div>
     </div>
   );

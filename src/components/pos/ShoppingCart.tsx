@@ -6,9 +6,11 @@ import { Sale, SaleItem } from '../../types/sale';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { formatCurrency } from '../../utils/formatCurrency';
-import { User, Plus, Minus, CreditCard, Wallet, Printer, Download } from 'lucide-react';
+import { Plus, Minus, CreditCard, Wallet, Printer, Download } from 'lucide-react';
 
 const GST_RATE = 0.18;
+const LOYALTY_POINT_VALUE = 5;
+
 const docToCustomer = (doc: DocumentData): Customer => ({
     id: doc.id,
     name: doc.data().name || '',
@@ -32,14 +34,21 @@ interface ShoppingCartProps {
     onSelectCustomer: (customer: Customer | null) => void;
     walkInName: string;
     setWalkInName: (name: string) => void;
-    discount: number;
-    onDiscountChange: (discount: number) => void;
+    subTotal: number;
+    totalDiscount: number;
+    gstAmount: number;
+    loyaltyDiscount: number;
+    totalAmount: number;
+    loyaltyPointsToUse: number;
+    onLoyaltyPointsChange: (points: number) => void;
 }
 
 export function ShoppingCart(props: ShoppingCartProps) {
     const {
-        cart, lastSale, isSubmitting, onUpdateQuantity, onConfirmCheckout, onPrint, onNewSale,
-        selectedCustomer, onSelectCustomer, walkInName, setWalkInName, discount, onDiscountChange
+        cart, lastSale, isSubmitting, onUpdateQuantity, onConfirmCheckout, onPrint, onDownloadPdf, onNewSale,
+        selectedCustomer, onSelectCustomer, walkInName, setWalkInName,
+        subTotal, totalDiscount, gstAmount, loyaltyDiscount, totalAmount,
+        loyaltyPointsToUse, onLoyaltyPointsChange
     } = props;
 
     const [paymentMode, setPaymentMode] = useState<'Cash' | 'Card' | 'UPI'>('Cash');
@@ -81,20 +90,10 @@ export function ShoppingCart(props: ShoppingCartProps) {
         setCustomerSearchTerm('');
     };
 
-    const { subTotal, gstAmount, totalAmount, roundOffAmount } = useMemo(() => {
-        const sub = cart.reduce((acc, item) => acc + item.priceAtSale * item.quantity, 0);
-        const gst = sub * GST_RATE;
-        const preRoundTotal = sub + gst - discount;
-        const finalTotal = Math.round(preRoundTotal);
-        const roundOff = finalTotal - preRoundTotal;
-
-        return {
-            subTotal: sub,
-            gstAmount: gst,
-            totalAmount: finalTotal,
-            roundOffAmount: roundOff
-        };
-    }, [cart, discount]);
+    const roundOffAmount = useMemo(() => {
+        const preRoundTotal = subTotal + gstAmount - loyaltyDiscount;
+        return totalAmount - preRoundTotal;
+    }, [subTotal, gstAmount, loyaltyDiscount, totalAmount]);
 
     const handleCheckoutClick = () => {
         onConfirmCheckout({ paymentMode, amountReceived });
@@ -106,9 +105,12 @@ export function ShoppingCart(props: ShoppingCartProps) {
             <div className="relative mb-4">
                 <Input
                     placeholder="Search phone or enter walk-in name..."
-                    value={selectedCustomer ? selectedCustomer.name : walkInName}
+                    value={selectedCustomer ? `${selectedCustomer.name} (${selectedCustomer.phone})` : customerSearchTerm || walkInName}
                     onChange={(e) => {
-                        if (selectedCustomer) onSelectCustomer(null);
+                        if (selectedCustomer) {
+                            onSelectCustomer(null);
+                            onLoyaltyPointsChange(0);
+                        }
                         setWalkInName(e.target.value);
                         setCustomerSearchTerm(e.target.value);
                     }}
@@ -151,32 +153,49 @@ export function ShoppingCart(props: ShoppingCartProps) {
 
             <div className="pt-4 space-y-3 text-sm">
                 <div className="flex justify-between text-slate-300"><span>Subtotal</span><span>{formatCurrency(subTotal)}</span></div>
-                <div className="flex justify-between text-slate-300"><span>GST ({GST_RATE * 100}%)</span><span>{formatCurrency(gstAmount)}</span></div>
-                <div className="flex justify-between items-center text-slate-300">
-                    <span>Discount</span>
-                    <div className="w-28">
-                        <Input
-                            type="number"
-                            placeholder="0.00"
-                            className="h-8 w-full text-right bg-slate-700 border-slate-600 p-1 text-sm"
-                            value={discount || ''}
-                            onChange={(e) => onDiscountChange(parseFloat(e.target.value) || 0)}
-                            disabled={!!lastSale}
-                        />
+                {totalDiscount > 0 && (
+                    <div className="flex justify-between text-green-400">
+                        <span>Product Discounts</span>
+                        <span>- {formatCurrency(totalDiscount)}</span>
                     </div>
-                </div>
+                )}
+                <div className="flex justify-between text-slate-300"><span>GST ({GST_RATE * 100}%)</span><span>{formatCurrency(gstAmount)}</span></div>
+
+                {selectedCustomer && selectedCustomer.loyaltyPoints > 0 && !lastSale && (
+                    <div className="flex justify-between items-center text-slate-300">
+                        <span>Use Points ({selectedCustomer.loyaltyPoints} avail.)</span>
+                        <div className="w-28">
+                            <Input
+                                type="number"
+                                placeholder="0"
+                                className="h-8 w-full text-right bg-slate-700 border-slate-600 p-1 text-sm"
+                                value={loyaltyPointsToUse || ''}
+                                onChange={(e) => {
+                                    const points = parseInt(e.target.value) || 0;
+                                    const totalBeforeLoyalty = subTotal + gstAmount;
+                                    const maxPointsValue = Math.floor(totalBeforeLoyalty);
+                                    const maxPointsCanUse = Math.min(selectedCustomer.loyaltyPoints, Math.floor(maxPointsValue / LOYALTY_POINT_VALUE));
+                                    onLoyaltyPointsChange(Math.max(0, Math.min(points, maxPointsCanUse)));
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
+                {loyaltyDiscount > 0 && (
+                    <div className="flex justify-between text-green-400">
+                        <span>Loyalty Discount</span>
+                        <span>- {formatCurrency(loyaltyDiscount)}</span>
+                    </div>
+                )}
                 <div className="flex justify-between text-slate-300">
                     <span>Round Off</span>
-                    <span className={roundOffAmount >= 0 ? 'text-green-400' : 'text-red-400'}>
-                        {roundOffAmount.toFixed(2)}
-                    </span>
+                    <span className={roundOffAmount >= 0 ? 'text-green-400' : 'text-red-400'}>{roundOffAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-lg border-t border-slate-700 pt-2">
                     <span>Total</span>
                     <span>{formatCurrency(totalAmount)}</span>
                 </div>
             </div>
-
 
             <div className="mt-auto pt-4">
                 {lastSale ? (
@@ -198,7 +217,6 @@ export function ShoppingCart(props: ShoppingCartProps) {
                             Start New Sale
                         </Button>
                     </div>
-
                 ) : (
                     <div>
                         <p className="text-sm font-medium mb-2">Payment Method:</p>

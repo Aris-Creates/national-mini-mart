@@ -4,13 +4,13 @@ import { db } from '../../../firebase';
 import { Product } from '../../types/product';
 import { Input } from '../ui/Input';
 import { formatCurrency } from '../../utils/formatCurrency';
-import { Search } from 'lucide-react';
 
 const docToProduct = (doc: DocumentData): Product => ({
   id: doc.id,
   name: doc.data().name || '',
   barcode: doc.data().barcode || '',
   mrp: doc.data().mrp || 0,
+  discountPrice: doc.data().discountPrice, // ADDED: Ensure discount price is fetched
   stock: doc.data().stock || 0,
   createdAt: doc.data().createdAt as Timestamp,
   updatedAt: doc.data().updatedAt as Timestamp,
@@ -27,7 +27,6 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
 
   useEffect(() => {
     const searchProducts = async () => {
-      // Don't search if the term is too short
       if (searchTerm.trim().length < 2) {
         setResults([]);
         return;
@@ -37,19 +36,14 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
       try {
         const lowercasedTerm = searchTerm.toLowerCase();
 
-        // --- UPDATED LOGIC: Create two parallel queries ---
-
-        // Query 1: Search by product name (prefix search)
         const nameQuery = query(
           collection(db, "products"),
           where('name', '>=', lowercasedTerm),
           where('name', '<=', lowercasedTerm + '\uf8ff'),
           orderBy('name'),
-          limit(10) // Limit results to keep it fast
+          limit(10)
         );
 
-        // Query 2: Search by barcode (prefix search)
-        // Note: Barcodes are often case-sensitive, so we use the original searchTerm
         const barcodeQuery = query(
           collection(db, "products"),
           where('barcode', '>=', searchTerm),
@@ -58,28 +52,23 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
           limit(10)
         );
 
-        // Execute both queries in parallel
         const [nameSnapshot, barcodeSnapshot] = await Promise.all([
           getDocs(nameQuery),
           getDocs(barcodeQuery)
         ]);
 
-        // --- Merge results and remove duplicates ---
         const productsMap = new Map<string, Product>();
 
-        // Add name results to the map
         nameSnapshot.docs.forEach(doc => {
             const product = docToProduct(doc);
             productsMap.set(product.id, product);
         });
 
-        // Add barcode results to the map (duplicates will be overwritten)
         barcodeSnapshot.docs.forEach(doc => {
             const product = docToProduct(doc);
             productsMap.set(product.id, product);
         });
         
-        // Convert the map values back to an array and set the state
         setResults(Array.from(productsMap.values()));
 
       } catch (error) {
@@ -89,7 +78,6 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
       }
     };
     
-    // Debounce the search to avoid running queries on every keystroke
     const debounce = setTimeout(() => searchProducts(), 300);
     return () => clearTimeout(debounce);
   }, [searchTerm]);
@@ -100,7 +88,6 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
       <div className="flex gap-4 mb-4">
         <Input
           className="flex-grow"
-          // --- UPDATED: Placeholder text ---
           placeholder="Search by name or barcode..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -119,9 +106,18 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
         {results.map(product => (
           <button key={product.id} onClick={() => onAddToCart(product)} disabled={product.stock <= 0}
             className="bg-slate-700 p-3 rounded-md text-left transition-transform hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed flex flex-col justify-between h-28">
-            <p className="font-semibold text-sm truncate">{product.name}</p>
             <div>
-              <p className="text-xs text-slate-400">{formatCurrency(product.mrp)}</p>
+              <p className="font-semibold text-sm truncate">{product.name}</p>
+              {product.discountPrice && product.discountPrice < product.mrp ? (
+                 <div>
+                    <p className="text-xs text-slate-400 line-through">{formatCurrency(product.mrp)}</p>
+                    <p className="text-sm font-bold text-green-400">{formatCurrency(product.discountPrice)}</p>
+                 </div>
+              ) : (
+                <p className="text-sm text-slate-300 font-bold">{formatCurrency(product.mrp)}</p>
+              )}
+            </div>
+            <div>
               <p className={`text-xs font-bold ${product.stock > 10 ? 'text-green-400' : product.stock > 0 ? 'text-orange-400' : 'text-red-400'}`}>
                 Stock: {product.stock}
               </p>
