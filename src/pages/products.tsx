@@ -1,18 +1,15 @@
-import { useState, useEffect } from 'react';
+// src/pages/ProductsPage.tsx
+import { useState, useEffect, useMemo } from 'react'; // Import useMemo
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Product } from '../types/product';
-
-// --- UI Components & Utils ---
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Table, TableHeader, TableRow, TableCell } from '../components/ui/Table';
 import { formatCurrency } from '../utils/formatCurrency';
-
-// --- Icons ---
 import { Edit, Trash2, Plus, Frown, BookOpen } from 'lucide-react';
 
-// --- Type-Safe Converter ---
+// --- Updated Type-Safe Converter ---
 const docToProduct = (doc: DocumentData): Product => {
   const data = doc.data();
   return {
@@ -21,12 +18,13 @@ const docToProduct = (doc: DocumentData): Product => {
     barcode: data.barcode || '',
     mrp: data.mrp || 0,
     stock: data.stock || 0,
+    gstRate: data.gstRate, // <-- ADDED
     createdAt: data.createdAt as Timestamp,
     updatedAt: data.updatedAt as Timestamp,
   };
 };
 
-const EMPTY_PRODUCT: Partial<Product> = { name: '', barcode: '', mrp: 0 };
+const EMPTY_PRODUCT: Partial<Product> = { name: '', barcode: '', mrp: 0, gstRate: 0 };
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -34,6 +32,25 @@ export default function ProductsPage() {
   const [currentProduct, setCurrentProduct] = useState<Partial<Product>>(EMPTY_PRODUCT);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // --- NEW STATE for Price & GST Calculation ---
+  const [priceInputType, setPriceInputType] = useState<'withGst' | 'withoutGst'>('withGst');
+  const [priceInputValue, setPriceInputValue] = useState<number>();
+  const [gstRateInput, setGstRateInput] = useState<number>(18); // Default to 18%
+
+  // --- NEW: Calculate Final MRP in real-time ---
+  const finalMrp = useMemo(() => {
+    if (priceInputType === 'withGst') {
+      return priceInputValue;
+    }
+    if (priceInputType === 'withoutGst') {
+      const taxAmount = (priceInputValue ?? 0) * (gstRateInput / 100);
+      // Round to 2 decimal places to avoid floating point issues
+      return Math.round(((priceInputValue ?? 0) + taxAmount) * 100) / 100;
+    }
+    return 0;
+  }, [priceInputType, priceInputValue, gstRateInput]);
+
 
   const fetchProducts = async () => {
     setIsLoading(true);
@@ -50,25 +67,36 @@ export default function ProductsPage() {
   useEffect(() => { fetchProducts(); }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type } = e.target;
-    const processedValue = type === 'number' ? parseFloat(value) || 0 : value;
-    setCurrentProduct(prev => ({ ...prev, [name]: processedValue }));
+    const { name, value } = e.target;
+    setCurrentProduct(prev => ({ ...prev, [name]: value }));
   };
   
+  // --- UPDATED: Populate all form fields when selecting a product ---
   const handleSelectProduct = (product: Product) => {
     setCurrentProduct(product);
+    setPriceInputType('withGst'); // Default to showing the final MRP
+    setPriceInputValue(product.mrp || 0);
+    setGstRateInput(product.gstRate || 18); // Use saved rate or default
     setFormError(null);
   };
   
+  // --- UPDATED: Clear all form state ---
   const handleClearForm = () => {
     setCurrentProduct(EMPTY_PRODUCT);
+    setPriceInputType('withGst');
+    setPriceInputValue(0);
+    setGstRateInput(18);
     setFormError(null);
   };
 
+  // --- UPDATED: Save logic with GST calculation ---
   const handleSaveProduct = async () => {
-    if (!currentProduct) return;
     if (!currentProduct.name?.trim()) {
       setFormError("Product name is required.");
+      return;
+    }
+    if ((finalMrp ?? 0) <= 0) {
+      setFormError("Final MRP must be greater than zero.");
       return;
     }
 
@@ -76,6 +104,7 @@ export default function ProductsPage() {
     setFormError(null);
 
     try {
+      // Barcode validation remains the same
       if (currentProduct.barcode?.trim()) {
         const q = query(collection(db, "products"), where("barcode", "==", currentProduct.barcode.trim()));
         const existing = await getDocs(q);
@@ -86,10 +115,12 @@ export default function ProductsPage() {
         }
       }
 
+      // Prepare data for Firestore, using the calculated final MRP
       const productData = {
         name: currentProduct.name.trim(),
         barcode: currentProduct.barcode?.trim() || '',
-        mrp: Number(currentProduct.mrp) || 0,
+        mrp: finalMrp, // <-- Use calculated MRP
+        gstRate: priceInputType === 'withoutGst' ? gstRateInput : 0, // <-- Save GST rate
         updatedAt: serverTimestamp(),
       };
 
@@ -129,9 +160,6 @@ export default function ProductsPage() {
             <h1 className="text-3xl font-bold">Product Catalog</h1>
             <p className="text-slate-400">Add, edit, and manage core product details</p>
         </div>
-        <Button onClick={handleClearForm} className="flex items-center gap-2">
-            <Plus size={18} /> New Product
-        </Button>
       </header>
       
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -148,12 +176,43 @@ export default function ProductsPage() {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">Barcode</label>
-                        <Input name="barcode" placeholder="Scan or enter barcode" value={currentProduct.barcode || ''} onChange={handleInputChange} required/>
+                        <Input name="barcode" placeholder="Scan or enter barcode" value={currentProduct.barcode || ''} onChange={handleInputChange} />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">MRP</label>
-                        <Input name="mrp" type="number" placeholder="0.00" value={currentProduct.mrp ?? ''} onChange={handleInputChange} />
+
+                    {/* --- NEW Price & GST Section --- */}
+                    <div className="border border-slate-700 rounded-lg p-3 space-y-3 bg-slate-900/30">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Price Type</label>
+                            <select 
+                                value={priceInputType}
+                                onChange={(e) => setPriceInputType(e.target.value as 'withGst' | 'withoutGst')}
+                                className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-slate-100"
+                            >
+                                <option value="withGst">Price includes GST (Final MRP)</option>
+                                <option value="withoutGst">Price excludes GST</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">
+                                {priceInputType === 'withGst' ? 'Final MRP' : 'Base Price (before tax)'}
+                            </label>
+                            <Input name="mrp" type="number" min="0" placeholder="0.00" value={priceInputValue} onChange={(e) => setPriceInputValue(parseFloat(e.target.value) || 0)} />
+                        </div>
+
+                        {priceInputType === 'withoutGst' && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">GST Rate (%)</label>
+                                <Input type="number" min="0" placeholder="e.g., 18" value={gstRateInput} onChange={(e) => setGstRateInput(parseFloat(e.target.value) || 0)} />
+                            </div>
+                        )}
+
+                        <div className="border-t border-slate-700 pt-3">
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Calculated Final MRP</label>
+                            <Input value={formatCurrency(finalMrp)} readOnly className="bg-slate-800 font-bold text-green-400" />
+                        </div>
                     </div>
+
                     {formError && <p className="text-red-400 text-sm text-center">{formError}</p>}
                     <Button onClick={handleSaveProduct} className="w-full" disabled={isSaving}>
                         {isSaving ? "Saving..." : "Save Product"}
@@ -169,13 +228,16 @@ export default function ProductsPage() {
                     products.length > 0 ? (
                         <div className="overflow-x-auto max-h-[calc(100vh-250px)]">
                             <Table>
-                                <TableHeader><tr><TableCell>Name</TableCell><TableCell>Barcode</TableCell><TableCell>MRP</TableCell><TableCell>Actions</TableCell></tr></TableHeader>
+                                {/* --- UPDATED Table Header --- */}
+                                <TableHeader><tr><TableCell>Name</TableCell><TableCell>Barcode</TableCell><TableCell>GST</TableCell><TableCell>Final MRP</TableCell><TableCell>Actions</TableCell></tr></TableHeader>
                                 <tbody>
                                     {products.map(product => (
                                         <TableRow key={product.id} className="hover:bg-slate-700/50">
                                             <TableCell>{product.name}</TableCell>
                                             <TableCell>{product.barcode || 'N/A'}</TableCell>
-                                            <TableCell>{formatCurrency(product.mrp)}</TableCell>
+                                            {/* --- ADDED GST Rate column --- */}
+                                            <TableCell>{product.gstRate ? `${product.gstRate}%` : 'Inc.'}</TableCell>
+                                            <TableCell className="font-semibold">{formatCurrency(product.mrp)}</TableCell>
                                             <TableCell>
                                                 <div className="flex space-x-2">
                                                     <button onClick={() => handleSelectProduct(product)} className="text-blue-400 hover:text-blue-300 p-1" title="Edit"><Edit size={18} /></button>

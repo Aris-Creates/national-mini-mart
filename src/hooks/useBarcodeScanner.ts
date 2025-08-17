@@ -17,7 +17,7 @@ export const useBarcodeScanner = (onScan: (barcode: string) => void, enabled: bo
   // We use a ref to hold the buffered keystrokes. This prevents re-renders on every key press.
   const barcodeBuffer = useRef<string>('');
   // Ref to hold the timer ID.
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     // If the listener is disabled, or if the event is coming from an input/textarea, ignore it.
