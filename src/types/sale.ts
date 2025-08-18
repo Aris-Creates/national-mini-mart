@@ -5,9 +5,10 @@ export interface SaleItem {
   productId: string;
   productName: string;
   quantity: number;
-  mrp: number;
-  priceAtSale: number;
-  gstRate?: number; // GST rate for this specific item
+  mrp: number; // The original MRP at the time of sale
+  priceAtSale: number; // The price the customer actually paid per unit
+  costPriceAtSale: number; // The store's cost at the time of sale
+  gstRate: number;
 }
 
 export interface Sale {
@@ -16,14 +17,14 @@ export interface Sale {
   items: SaleItem[];
   customerName: string;
   customerId?: string;
-  subTotal: number; // The total base price of all items (pre-tax, for DB)
-  discount: number; // Sum of individual product-level discounts
+  subTotal: number; // Sum of items' pre-tax base price
+  discount: number;
   additionalDiscount?: {
     type: 'percentage' | 'fixed';
     value: number;
     amount: number;
   };
-  gst: number; // The total GST amount from all items (for DB)
+  gst: number; // Total GST amount
   roundOff: number;
   totalAmount: number;
   paymentMode: 'Cash' | 'Card' | 'UPI';
@@ -33,4 +34,5 @@ export interface Sale {
   loyaltyPointsUsed: number;
   soldAt: Timestamp;
   soldBy: string;
+  updatedAt?: Timestamp;
 }

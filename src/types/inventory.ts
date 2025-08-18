@@ -1,3 +1,4 @@
+// src/types/inventory.ts
 import { Timestamp } from "firebase/firestore";
 
 export interface InventoryLog {

@@ -1,32 +1,65 @@
-// src/components/ui/Modal.tsx
-
-import React from 'react';
+// src/components/ui/Modal.tsx (Example of how to implement sizing)
+import { Dialog, Transition } from '@headlessui/react';
+import { Fragment, ReactNode } from 'react';
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  children: React.ReactNode;
   title: string;
+  children: ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl';
 }
 
-export function Modal({ isOpen, onClose, children, title }: ModalProps) {
-  if (!isOpen) return null;
+const sizeClasses = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '3xl': 'max-w-3xl',
+  '4xl': 'max-w-4xl',
+  '5xl': 'max-w-5xl',
+};
 
+export function Modal({ isOpen, onClose, title, children, size = '2xl' }: ModalProps) {
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md text-white border border-slate-700"
-        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the modal
-      >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">&times;</button>
+    <Transition appear show={isOpen} as={Fragment}>
+      <Dialog as="div" className="relative z-50" onClose={onClose}>
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black bg-opacity-40" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel
+                className={`w-full ${sizeClasses[size]} transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all`}
+              >
+                <Dialog.Title as="h3" className="text-xl font-bold leading-6 text-gray-900">
+                  {title}
+                </Dialog.Title>
+                <div className="mt-4">{children}</div>
+              </Dialog.Panel>
+            </Transition.Child>
+          </div>
         </div>
-        <div>{children}</div>
-      </div>
-    </div>
+      </Dialog>
+    </Transition>
   );
 }

@@ -1,76 +1,130 @@
+// src/components/printing/ThermalLayout.tsx
 import React from 'react';
 import { Sale } from '../../types/sale';
 import { formatCurrency } from '../../utils/formatCurrency';
 
 interface ThermalLayoutProps {
-  sale: Sale & { roundOff?: number };
+  sale: Sale;
   storeDetails: {
     name: string;
     address: string;
     phone: string;
-    logoUrl?: string;
   };
 }
 
-const LOYALTY_POINT_VALUE = 5;
-
 // --- CONFIGURATION FOR CHARACTER-BASED LAYOUT ---
-const LINE_CHAR_COUNT = 42;
+// This is the total number of characters available on a standard 80mm receipt line.
+const LINE_CHAR_COUNT = 42; 
 
-// **FIX:** Adjusted column widths to prevent line wrapping.
-// The sum of widths + spaces (18 + 4 + 8 + 8 + 3 spaces = 41) is now less than LINE_CHAR_COUNT.
-const NAME_WIDTH = 12;
+// Column widths are precisely defined. The sum of widths + spaces between them must be <= LINE_CHAR_COUNT.
+// 18 (Name) + 1 + 4 (Qty) + 1 + 8 (Price) + 1 + 8 (Total) = 41 characters. This fits perfectly.
+const NAME_WIDTH = 18;
 const QTY_WIDTH = 4;
 const PRICE_WIDTH = 8;
 const TOTAL_WIDTH = 8;
 
-// --- HELPER FUNCTIONS FOR MANUAL STRING PADDING ---
+// --- HELPER FUNCTIONS FOR PERFECT STRING PADDING ---
 
 /**
- * Creates a perfectly formatted two-column line for totals and payments.
+ * Creates a perfectly formatted two-column line with right-aligned values.
+ * e.g., "Total         ₹1,000.00"
  */
 const formatTotalLine = (label: string, value: string | number): string => {
   const valueStr = String(value);
   const labelStr = String(label);
   const spaces = LINE_CHAR_COUNT - labelStr.length - valueStr.length;
-  return labelStr + ' '.repeat(Math.max(0, spaces)) + valueStr;
+  // Ensures there are always spaces, preventing overflow.
+  return labelStr + ' '.repeat(Math.max(1, spaces)) + valueStr;
 };
 
 /**
  * Creates a perfectly formatted multi-column data line for a single sale item.
+ * Ensures each column aligns perfectly by padding strings to an exact length.
  */
 const formatItemLine = (name: string, qty: number, price: number, total: number): string => {
+  // Truncate name if too long and pad to ensure consistent length
   const formattedName = name.substring(0, NAME_WIDTH).padEnd(NAME_WIDTH);
+  // Pad numbers from the left to right-align them
   const formattedQty = String(qty).padStart(QTY_WIDTH);
   const formattedPrice = formatCurrency(price, { showSymbol: false }).padStart(PRICE_WIDTH);
   const formattedTotal = formatCurrency(total, { showSymbol: false }).padStart(TOTAL_WIDTH);
   
+  // Combine all parts with single spaces as separators
   return `${formattedName} ${formattedQty} ${formattedPrice} ${formattedTotal}`;
 };
 
-// This is a simple row for the top meta-data section only.
+// Simple component for the top meta-data section. Flexbox is fine here.
 const MetaRow = ({ label, value }: { label: string; value: string | number }) => (
   <div className="flex justify-between">
     <span>{label}</span>
-    <span>{value}</span>
+    <span className="text-right">{value}</span>
   </div>
 );
 
-// The Final, Corrected Component
 export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps>(({ sale, storeDetails }, ref) => {
-  const soldDate = sale.soldAt instanceof Date ? sale.soldAt : sale.soldAt.toDate();
-
-  const mrpTotal = sale.subTotal + sale.discount;
-  const loyaltyDiscount = sale.loyaltyPointsUsed * LOYALTY_POINT_VALUE;
-  const totalSaved = sale.discount + loyaltyDiscount;
+  const soldDate = sale.soldAt.toDate();
   const dashedLine = '-'.repeat(LINE_CHAR_COUNT);
 
-  // Create the header line as a separate, correctly formatted string.
-  const headerLine = 
+  // --- ACCURATE FINANCIAL CALCULATIONS ---
+  const mrpTotal = sale.items.reduce((acc, item) => acc + item.mrp * item.quantity, 0);
+  const productSavings = sale.items.reduce((acc, item) => acc + (item.mrp - item.priceAtSale) * item.quantity, 0);
+  const additionalDiscount = sale.additionalDiscount?.amount || 0;
+  const loyaltyDiscount = sale.loyaltyPointsUsed * 5; // Assuming 1 point = 5 currency
+  const totalSaved = productSavings + additionalDiscount + loyaltyDiscount;
+
+  // --- BUILD THE ENTIRE RECEIPT BODY AS A SINGLE STRING ---
+  // This is the key to perfect alignment. We construct each line and join with newlines.
+  const receiptBodyLines = [];
+
+  // Header Line
+  receiptBodyLines.push(
     'Item'.padEnd(NAME_WIDTH) + ' ' + 
     'Qty'.padStart(QTY_WIDTH) + ' ' + 
     'Price'.padStart(PRICE_WIDTH) + ' ' + 
-    'Total'.padStart(TOTAL_WIDTH);
+    'Total'.padStart(TOTAL_WIDTH)
+  );
+  receiptBodyLines.push(dashedLine);
+
+  // Item Lines
+  sale.items.forEach(item => {
+    receiptBodyLines.push(formatItemLine(
+      item.productName,
+      item.quantity,
+      item.priceAtSale,
+      item.priceAtSale * item.quantity
+    ));
+  });
+  receiptBodyLines.push(dashedLine);
+
+  // Totals Section
+  receiptBodyLines.push(formatTotalLine('MRP Total', formatCurrency(mrpTotal)));
+  if (productSavings > 0) receiptBodyLines.push(formatTotalLine('Item Savings', `- ${formatCurrency(productSavings)}`));
+  if (additionalDiscount > 0) receiptBodyLines.push(formatTotalLine('Cart Discount', `- ${formatCurrency(additionalDiscount)}`));
+  if (loyaltyDiscount > 0) receiptBodyLines.push(formatTotalLine(`Loyalty (${sale.loyaltyPointsUsed} pts)`, `- ${formatCurrency(loyaltyDiscount)}`));
+  
+  // Subtotal before tax
+  const subTotalBeforeTax = sale.totalAmount - sale.roundOff - sale.gst;
+  receiptBodyLines.push(formatTotalLine('Subtotal', formatCurrency(subTotalBeforeTax)));
+
+  if (sale.gst > 0) receiptBodyLines.push(formatTotalLine('GST', formatCurrency(sale.gst)));
+  if (sale.roundOff.toFixed(2) !== '0.00' && sale.roundOff.toFixed(2) !== '-0.00') {
+    receiptBodyLines.push(formatTotalLine('Round Off', sale.roundOff.toFixed(2)));
+  }
+  receiptBodyLines.push(dashedLine);
+
+  // Final Total
+  receiptBodyLines.push(formatTotalLine('TOTAL', formatCurrency(sale.totalAmount)));
+  receiptBodyLines.push(dashedLine);
+
+  // Payment Section
+  receiptBodyLines.push(formatTotalLine('Paid via', sale.paymentMode));
+  if (sale.paymentMode === 'Cash') {
+    receiptBodyLines.push(formatTotalLine('Received', formatCurrency(sale.amountReceived ?? 0)));
+    receiptBodyLines.push(formatTotalLine('Change', formatCurrency(sale.changeGiven ?? 0)));
+  }
+
+  // Join all lines into a single string for the <pre> tag
+  const receiptContent = receiptBodyLines.join('\n');
 
   return (
     <div
@@ -86,60 +140,19 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
       </div>
 
       {/* --- Bill Meta Info --- */}
-      <div className="border-t border-b border-dashed border-black py-1">
+      <div className="border-t border-b border-dashed border-black py-1 text-[11px]">
         <MetaRow label="Bill No:" value={sale.billNumber} />
         <MetaRow label="Date:" value={soldDate.toLocaleDateString()} />
         <MetaRow label="Time:" value={soldDate.toLocaleTimeString()} />
-        <MetaRow label="Customer:" value={sale.customerName || 'Walk-in Customer'} />
+        <MetaRow label="Customer:" value={sale.customerName || 'Walk-in'} />
       </div>
 
       {/* --- Pre-formatted text section for guaranteed alignment --- */}
-      <pre className="my-2 whitespace-pre-wrap">
-        {/* --- Header --- */}
-        {headerLine}
-        {'\n'}
-        {dashedLine}
-        {'\n'}
-        
-        {/* --- Items --- */}
-        {sale.items.map(item =>
-          formatItemLine(
-            item.productName,
-            item.quantity,
-            item.priceAtSale,
-            item.priceAtSale * item.quantity
-          )
-        ).join('\n')}
-        {'\n'}
-        {dashedLine}
-        {'\n'}
-
-        {/* --- Totals --- */}
-        {formatTotalLine('MRP Total', formatCurrency(mrpTotal))}
-        {'\n'}
-        {sale.discount > 0 && formatTotalLine('Product Discount', `- ${formatCurrency(sale.discount)}`) + '\n'}
-        {formatTotalLine('Subtotal', formatCurrency(sale.subTotal))}
-        {'\n'}
-        {typeof sale.gst !== 'undefined' && formatTotalLine('GST', formatCurrency(sale.gst)) + '\n'}
-        {loyaltyDiscount > 0 && formatTotalLine(`Loyalty (${sale.loyaltyPointsUsed} pts)`, `- ${formatCurrency(loyaltyDiscount)}`) + '\n'}
-        {typeof sale.roundOff !== 'undefined' && sale.roundOff.toFixed(2) !== '0.00' && sale.roundOff.toFixed(2) !== '-0.00' && formatTotalLine('Round Off', sale.roundOff.toFixed(2)) + '\n'}
-        {dashedLine}
-        {'\n'}
-        {formatTotalLine('TOTAL', formatCurrency(sale.totalAmount))}
-        {'\n'}
-        {dashedLine}
-        {'\n'}
-
-        {/* --- Payment --- */}
-        {formatTotalLine('Paid via', sale.paymentMode)}
-        {'\n'}
-        {sale.paymentMode === 'Cash' && (
-          formatTotalLine('Received', formatCurrency(sale.amountReceived ?? 0)) + '\n' +
-          formatTotalLine('Change', formatCurrency(sale.changeGiven ?? 0)) + '\n'
-        )}
+      <pre className="my-2 whitespace-pre-wrap text-[11px] leading-snug">
+        {receiptContent}
       </pre>
 
-      {/* --- "You Saved" Banner (optional) --- */}
+      {/* --- "You Saved" Banner --- */}
       {totalSaved > 0 && (
         <div className="text-center font-bold text-xs bg-black text-white p-1 my-1">
           🎉 You Saved {formatCurrency(totalSaved)}! 🎉

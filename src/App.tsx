@@ -10,6 +10,7 @@ import SalesPage from './pages/sales';
 import ReportsPage from './pages/reports';
 import Layout from './components/layout/Layout';
 import { JSX } from 'react';
+import DashboardPage from './pages/dashboard';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -26,7 +27,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="/pos" />} />
+            <Route index element={<Navigate to="/dashboard" />} />
+            <Route path="dashboard" element={<DashboardPage/>}/>
             <Route path="pos" element={<PosPage />} />
             <Route path="products" element={<ProductsPage />} />
             <Route path="inventory" element={<InventoryPage />} />

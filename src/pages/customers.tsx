@@ -193,7 +193,7 @@ export default function CustomersPage() {
         </Button>
       </div>
 
-      <div className="bg-slate-800 p-4 rounded-lg shadow-md">
+      <div className="bg-zinc-300 p-4 shadow-md">
         {renderContent()}
       </div>
 

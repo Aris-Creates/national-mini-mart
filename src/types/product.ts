@@ -1,14 +1,18 @@
+// src/types/product.ts
 import { Timestamp } from "firebase/firestore";
 
 export interface Product {
   id: string;
-  barcode: string;
   name: string;
-  mrp: number; // Final, tax-inclusive price
-  discountPrice?: number;
-  stock: number;
-  gstRate?: number; // The GST percentage (e.g., 18 for 18%)
-  imageUrl?: string;
+  costPrice: number; // Price the store paid for the item
+  mrp: number; // Maximum Retail Price (sticker price)
+  sellingPrice?: number; // Optional discounted price, overrides MRP if present and lower
+  stock_quantity: number;
+  min_stock_level: number;
+  gst_rate: number;
+  hsn_code: string;
+  brand: string;
+  barcode?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
