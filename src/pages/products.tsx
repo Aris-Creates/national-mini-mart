@@ -233,7 +233,7 @@ export default function ProductsPage() {
 
               {formError && <p className="text-red-600 text-sm text-center">{formError}</p>}
               <div className="flex gap-2">
-                <Button onClick={handleSaveProduct} className="w-full" disabled={isSaving}>{isSaving ? "Saving..." : "Save Product"}</Button>
+                <Button onClick={handleSaveProduct} variant = "secondary" className="w-full" disabled={isSaving}>{isSaving ? "Saving..." : "Save Product"}</Button>
                 <Button onClick={handleClearForm} variant="secondary" className="w-full">Cancel</Button>
               </div>
             </div>

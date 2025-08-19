@@ -214,7 +214,7 @@ export default function CustomersPage() {
           {modalError && <p className="text-red-400 text-sm">{modalError}</p>}
 
           <div className="flex justify-end pt-2">
-            <Button onClick={handleSaveCustomer} className="w-full" disabled={isSaving}>
+            <Button onClick={handleSaveCustomer} variant = "secondary" className="w-full" disabled={isSaving}>
               {isSaving ? "Saving..." : "Save Customer"}
             </Button>
           </div>

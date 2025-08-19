@@ -1,66 +1,96 @@
+// src/hooks/useAuth.ts
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { auth } from '../../firebase'; // Your initialized Firebase auth instance
 import { 
     User, 
     onAuthStateChanged, 
-    signInWithEmailAndPassword, 
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword, // <-- Import the signup function
     signOut as firebaseSignOut 
 } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore'; // <-- Import setDoc
+import { auth, db } from '../../firebase';
 
-// Define the shape of the context value
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
+export interface UserProfile {
+  uid: string;
+  email: string;
+  fullName: string;
+  role: 'admin' | 'employee';
 }
 
-// Create the context with a default undefined value
+interface AuthContextType {
+  user: User | null;
+  profile: UserProfile | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  // **NEW**: Add signUp to the context type
+  signUp: (fullName: string, email: string, password: string) => Promise<void>;
+  signOutUser: () => Promise<void>;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Define the props for the AuthProvider component
 interface AuthProviderProps {
   children: ReactNode;
 }
 
-// This is the provider component that will wrap your app
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // Start as true to check initial auth state
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // This listener is the core of Firebase Auth in a React app.
-    // It automatically handles user session persistence (e.g., after a page refresh).
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      setLoading(false); // Auth state has been checked, set loading to false
+      if (currentUser) {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          setProfile(userDoc.data() as UserProfile);
+        } else {
+          setProfile(null);
+        }
+      } else {
+        setProfile(null);
+      }
+      setLoading(false);
     });
-
-    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
 
-  // Sign in function that LoginPage will call
   const signIn = async (email: string, password: string) => {
-    // The try/catch is handled in LoginPage, so we can let errors bubble up
     await signInWithEmailAndPassword(auth, email, password);
   };
 
-  // Sign out function for use in other parts of the app (e.g., a navbar)
-  const signOut = async () => {
-    await firebaseSignOut(auth);
-    // The onAuthStateChanged listener will automatically set the user to null
+  // **NEW**: The complete signUp function
+  const signUp = async (fullName: string, email: string, password: string) => {
+    // Step 1: Create the user in Firebase Authentication
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const newUser = userCredential.user;
+
+    // Step 2: Create the user's profile document in Firestore with the default role
+    const userDocRef = doc(db, 'users', newUser.uid);
+    await setDoc(userDocRef, {
+      uid: newUser.uid,
+      email: newUser.email,
+      fullName: fullName,
+      role: 'employee' // <-- Default role is set here!
+    });
+    // The onAuthStateChanged listener will automatically pick up the new user and profile.
   };
 
-  // The value provided to consuming components
+  const signOutUser = async () => {
+    await firebaseSignOut(auth);
+  };
+
   const value = {
     user,
+    profile,
     loading,
     signIn,
-    signOut,
+    signUp, // <-- Provide the new function
+    signOutUser,
   };
-  
-  // The loading check prevents rendering protected routes before auth state is known
+
   return (
     <AuthContext.Provider value={value}>
       {!loading && children}
@@ -68,7 +98,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   );
 };
 
-// This is the custom hook that components will use to access the context
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
