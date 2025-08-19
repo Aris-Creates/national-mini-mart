@@ -2,7 +2,7 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ShoppingCart, Box, Users, History, BarChart2, LogOut } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth'; // Ensure this path is correct
+import { useAuth } from '../../hooks/useAuth';
 
 // Define the structure for a navigation item
 interface NavItemType {
@@ -29,10 +29,10 @@ function NavItem({ href, children, icon: Icon }: { href: string; children: React
     <NavLink
       to={href}
       className={({ isActive }) =>
-        `flex items-center p-3 text-sm font-medium transition-colors ${
+        `flex items-center p-3 text-sm font-medium transition-colors rounded-md ${
           isActive
-            ? 'bg-blue-600 text-white' // Active state
-            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200' // Inactive state
+            ? 'bg-zinc-700 text-white' // Active state: A lighter, solid gray
+            : 'text-zinc-400 hover:text-white hover:bg-zinc-700/50' // Inactive: Muted, brightens on hover
         }`
       }
     >
@@ -43,11 +43,10 @@ function NavItem({ href, children, icon: Icon }: { href: string; children: React
 }
 
 const Layout: React.FC = () => {
-  const { profile, signOutUser } = useAuth(); // Use correct property name from AuthContextType
+  const { profile, signOutUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Filter the navigation items based on the current user's role
   const accessibleNavItems = allNavItems.filter(item => 
     profile && item.roles.includes(profile.role)
   );
@@ -65,13 +64,13 @@ const Layout: React.FC = () => {
   const pageTitle = currentPage ? currentPage.name : 'Welcome';
 
   return (
-    <div className="flex h-screen bg-slate-900 text-slate-200">
+    <div className="flex h-screen bg-gray-100">
       
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-800 p-4 flex flex-col border-r border-slate-700">
+      {/* --- NEW THEME: Dark Zinc Sidebar --- */}
+      <aside className="w-64 bg-zinc-900 text-zinc-100 p-4 flex flex-col border-r border-zinc-700">
         <div className="text-center mb-10">
-          <h1 className="text-2xl font-bold text-blue-700">National Mini Mart</h1>
-          <p className="text-sm text-gray-500">Departmental Stores</p>
+          <h1 className="text-2xl font-bold text-white">National Mini Mart</h1>
+          <p className="text-sm text-zinc-400">Departmental Stores</p>
         </div>
         <nav className="flex-grow space-y-2">
           {accessibleNavItems.map(item => (
@@ -81,17 +80,17 @@ const Layout: React.FC = () => {
           ))}
         </nav>
 
-        {/* User & Logout Section */}
-        <div className="border-t border-gray-200 pt-4 space-y-4">
+        {/* User & Logout Section - Styled for Zinc Theme */}
+        <div className="border-t border-zinc-700 pt-4 space-y-4">
           <div className="px-3">
-            <p className="text-xs text-gray-500">Welcome, {profile?.role}</p>
-            <p className="font-semibold text-gray-800 truncate" title={profile?.email || ''}>
+            <p className="text-xs text-zinc-400">Welcome, {profile?.role}</p>
+            <p className="font-semibold text-zinc-100 truncate" title={profile?.email || ''}>
               {profile?.email || 'user@example.com'}
             </p>
           </div>
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center p-3 transition-colors text-red-600 hover:bg-red-50 hover:text-red-800"
+            className="w-full flex items-center p-3 transition-colors text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-md"
           >
             <LogOut className="mr-3 h-5 w-5" />
             <span className="text-sm font-medium">Sign Out</span>
@@ -99,18 +98,24 @@ const Layout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main content area */}
+      {/* --- Main Content Area (Stays Light) --- */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
-        {/* Header */}
-        <header className="flex items-center justify-between p-4 border-b bg-white h-16 shrink-0">
+        {/* Header - Light Theme */}
+        <header className="flex items-center justify-between p-4 border-b border-gray-200 bg-white h-16 shrink-0">
           <h2 className="text-xl font-semibold text-gray-800">{pageTitle}</h2>
         </header>
 
-        {/* Child route content */}
+        {/* Child route content - Light Theme */}
         <main className="flex-1 p-6 overflow-y-auto bg-gray-100">
           <Outlet />
         </main>
+
+        {/* --- FOOTER: Themed to match the dark sidebar --- */}
+        <footer className="p-4 border-t border-zinc-700 bg-zinc-900 text-center text-sm text-zinc-400 shrink-0">
+          &copy; {new Date().getFullYear()} NMM V2.10.02. All Rights Reserved.<br />
+          Designed and Developed by Aris Innovations
+        </footer>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp, query, where, DocumentData, Timestamp } from 'firebase/firestore';
 import { db } from '../../firebase'; // Ensure this path is correct
 import { Customer } from '../types/customer'; // Ensure this path is correct
@@ -56,6 +56,14 @@ export default function CustomersPage() {
   useEffect(() => {
     fetchCustomers();
   }, []);
+  const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value;
+
+    // Allow only digits
+    if (/^\d{0,10}$/.test(input)) {
+      handleInputChange(e); // Call your existing handler if it's reusable
+    }
+  };
 
   const handleSaveCustomer = async () => {
     if (!currentCustomer || !currentCustomer.name || !currentCustomer.phone) {
@@ -77,7 +85,7 @@ export default function CustomersPage() {
         setIsSaving(false); // FIX: Stop execution and reset saving state
         return;
       }
-      
+
       const customerData: DocumentData = {
         name: currentCustomer.name,
         phone: currentCustomer.phone,
@@ -96,7 +104,7 @@ export default function CustomersPage() {
         customerData.createdAt = serverTimestamp();
         await addDoc(collection(db, "customers"), customerData);
       }
-      
+
       await fetchCustomers(); // Re-fetch the list to show updated data
       handleCloseModal();
 
@@ -107,12 +115,12 @@ export default function CustomersPage() {
       setIsSaving(false);
     }
   };
-  
+
   // --- EVENT HANDLERS ---
   const handleOpenModal = (customer: Customer | null = null) => {
     setModalError(null); // Clear previous errors
     // If no customer, set a clean slate for a new entry
-    setCurrentCustomer(customer || { name: '', phone: '', address: '', loyaltyPoints: 0 });
+    setCurrentCustomer(customer || { name: '', phone: '', address: ''});
     setIsModalOpen(true);
   };
 
@@ -168,8 +176,8 @@ export default function CustomersPage() {
               <TableCell>{customer.address || 'N/A'}</TableCell>
               <TableCell>{customer.loyaltyPoints}</TableCell>
               <TableCell>
-                <button 
-                  onClick={() => handleOpenModal(customer)} 
+                <button
+                  onClick={() => handleOpenModal(customer)}
                   className="text-blue-400 hover:text-blue-300 p-1 rounded-md transition-colors"
                   title="Edit Customer"
                 >
@@ -186,8 +194,8 @@ export default function CustomersPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Customer Management</h1>
-        <Button onClick={() => handleOpenModal()} className="flex items-center gap-2">
+        <h1 className="text-3xl text-gray-700 font-bold">Customer Management</h1>
+        <Button onClick={() => handleOpenModal()} className="bg-gray-700 flex items-center gap-2">
           <UserPlus size={18} />
           Add Customer
         </Button>
@@ -200,21 +208,29 @@ export default function CustomersPage() {
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={currentCustomer?.id ? "Edit Customer" : "Add New Customer"}>
         <div className="space-y-4">
           <Input name="name" placeholder="Full Name" value={currentCustomer?.name || ''} onChange={handleInputChange} />
-          <Input name="phone" placeholder="Phone Number" value={currentCustomer?.phone || ''} onChange={handleInputChange} disabled={!!currentCustomer?.id} />
-          <Input name="address" placeholder="Address (optional)" value={currentCustomer?.address || ''} onChange={handleInputChange} />
-          {/* FIX: Added missing input for loyalty points */}
-          <Input 
-            name="loyaltyPoints" 
-            type="number" // Important for correct input behavior and parsing
-            placeholder="Loyalty Points" 
-            value={currentCustomer?.loyaltyPoints || 0} 
-            onChange={handleInputChange} 
+          <Input
+            name="phone"
+            type="tel"
+            placeholder="Phone Number"
+            value={currentCustomer?.phone || ''}
+            onChange={handlePhoneChange}
+            maxLength={10}
+            pattern="\d{10}"
+            disabled={!!currentCustomer?.id}
           />
-          
+          <Input name="address" placeholder="Address (optional)" value={currentCustomer?.address || ''} onChange={handleInputChange} />
+          <Input
+            name="loyaltyPoints"
+            type="number" // Important for correct input behavior and parsing
+            placeholder="Loyalty Points"
+            value={currentCustomer?.loyaltyPoints}
+            onChange={handleInputChange}
+          />
+
           {modalError && <p className="text-red-400 text-sm">{modalError}</p>}
 
           <div className="flex justify-end pt-2">
-            <Button onClick={handleSaveCustomer} variant = "secondary" className="w-full" disabled={isSaving}>
+            <Button onClick={handleSaveCustomer} variant="secondary" className="w-full" disabled={isSaving}>
               {isSaving ? "Saving..." : "Save Customer"}
             </Button>
           </div>

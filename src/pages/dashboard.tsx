@@ -9,15 +9,15 @@ import { BarChart, DollarSign, Package, AlertTriangle, ShoppingCart, TrendingUp 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface Stats {
-  today: number;
-  thisWeek: number;
-  thisMonth: number;
-  lowStockCount: number;
+    today: number;
+    thisWeek: number;
+    thisMonth: number;
+    lowStockCount: number;
 }
 
 interface ChartData {
-  name: string;
-  sales: number;
+    name: string;
+    sales: number;
 }
 
 // A reusable component for displaying key statistics
@@ -34,13 +34,20 @@ const StatCard = ({ title, value, icon, description }: { title: string; value: s
     </div>
 );
 
-// --- SOLUTION: Helper function for dynamic greeting ---
 const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
+
+    if (hour >= 5 && hour < 12) {
+        return "Good morning";
+    } else if (hour >= 12 && hour < 17) {
+        return "Good afternoon";
+    } else if (hour >= 17 && hour < 21) {
+        return "Good evening";
+    } else {
+        return "Good night";
+    }
 };
+
 
 
 export default function DashboardPage() {
@@ -157,7 +164,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Sales Chart */}
                 <div className="lg:col-span-2 bg-white p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2"><TrendingUp size={22}/>Sales Trend (Last 7 Days)</h2>
+                    <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2"><TrendingUp size={22} />Sales Trend (Last 7 Days)</h2>
                     <div className="w-full h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
                             {/* --- SOLUTION: Add margin to the chart to prevent clipping --- */}
@@ -166,8 +173,8 @@ export default function DashboardPage() {
                                 <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
                                 <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(value) => formatCurrency(value as number)} />
                                 <Tooltip
-                                  formatter={(value: number) => [formatCurrency(value), 'Sales']}
-                                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }} 
+                                    formatter={(value: number) => [formatCurrency(value), 'Sales']}
+                                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
                                 />
                                 <Legend />
                                 <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 8 }} />
@@ -178,7 +185,7 @@ export default function DashboardPage() {
 
                 {/* Top Selling Products */}
                 <div className="bg-white p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2"><Package size={22}/>Top Selling Products</h2>
+                    <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2"><Package size={22} />Top Selling Products</h2>
                     <ul className="space-y-3">
                         {topProducts.length > 0 ? topProducts.map((product, index) => (
                             <li key={index} className="flex justify-between items-center text-sm">
@@ -193,7 +200,7 @@ export default function DashboardPage() {
                 <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 border border-gray-200">
                         <h2 className="text-xl font-bold text-gray-700 mb-4">Low Stock Items</h2>
-                         <ul className="space-y-3">
+                        <ul className="space-y-3">
                             {lowStockItems.length > 0 ? lowStockItems.map(item => (
                                 <li key={item.id} className="flex justify-between items-center text-sm">
                                     <span className="text-gray-800">{item.name}</span>
@@ -202,10 +209,10 @@ export default function DashboardPage() {
                             )) : <p className="text-gray-500 text-sm">No items are low on stock. Great!</p>}
                         </ul>
                     </div>
-                     <div className="bg-white p-6 border border-gray-200">
+                    <div className="bg-white p-6 border border-gray-200">
                         <h2 className="text-xl font-bold text-gray-700 mb-4">Recent Sales</h2>
-                         <ul className="space-y-3">
-                             {recentSales.map(sale => (
+                        <ul className="space-y-3">
+                            {recentSales.map(sale => (
                                 <li key={sale.id} className="flex justify-between items-center text-sm">
                                     <div>
                                         <p className="font-medium text-gray-800">{sale.customerName || 'Walk-in Customer'}</p>
@@ -213,7 +220,7 @@ export default function DashboardPage() {
                                     </div>
                                     <span className="font-bold text-blue-600">{formatCurrency(sale.totalAmount)}</span>
                                 </li>
-                             ))}
+                            ))}
                         </ul>
                     </div>
                 </div>

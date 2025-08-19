@@ -1,5 +1,5 @@
 // src/pages/PosPage.tsx
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef } from 'react';
 import { collection, writeBatch, doc, serverTimestamp, increment, Timestamp, query, where, getDocs, limit, DocumentData } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../hooks/useAuth';
@@ -15,6 +15,7 @@ import { SaleCompleteOverlay } from '../components/pos/SaleCompleteOverlay';
 import { useSaleCalculations } from '../hooks/useSaleCalculations';
 
 const docToProduct = (doc: DocumentData): Product => {
+    // ... docToProduct converter remains the same
     const data = doc.data();
     return {
         id: doc.id,
@@ -34,7 +35,8 @@ const docToProduct = (doc: DocumentData): Product => {
 };
 
 export default function PosPage() {
-  const { user } = useAuth();
+  // **FIXED**: Get the full user profile, including their role and other details.
+  const { profile } = useAuth(); 
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [walkInName, setWalkInName] = useState('');
@@ -59,10 +61,11 @@ export default function PosPage() {
     discountType,
     discountValue,
     loyaltyPointsToUse,
-    customer: selectedCustomer,
+    customer: selectedCustomer, // Pass the selected customer to the hook
   });
 
   const handleAddToCart = (product: Product) => {
+    // ... handleAddToCart logic remains the same
     if (product.stock_quantity <= 0) { alert("This product is out of stock!"); return; }
     const existingItem = cart.find(item => item.productId === product.id);
     if (existingItem) {
@@ -87,6 +90,7 @@ export default function PosPage() {
   };
 
   const handleBarcodeScan = async (barcode: string) => {
+    // ... handleBarcodeScan logic remains the same
     try {
       const q = query(collection(db, "products"), where("barcode", "==", barcode), limit(1));
       const snapshot = await getDocs(q);
@@ -97,6 +101,7 @@ export default function PosPage() {
   useBarcodeScanner(handleBarcodeScan, !lastSale);
 
   const handleUpdateQuantity = (productId: string, newQuantity: number) => {
+    // ... handleUpdateQuantity logic remains the same
     if (newQuantity <= 0) { setCart(cart.filter(item => item.productId !== productId)); }
     else { setCart(cart.map(item => item.productId === productId ? { ...item, quantity: newQuantity } : item)); }
   };
@@ -110,6 +115,11 @@ export default function PosPage() {
     try {
       const batch = writeBatch(db);
       const productSavings = cart.reduce((acc, item) => acc + (item.mrp - item.priceAtSale) * item.quantity, 0);
+
+      // **FIXED**: Correctly calculate points earned and used
+      const pointsEarned = selectedCustomer ? Math.floor(totalAmount / 100) : 0;
+      // The `useSaleCalculations` hook ensures `loyaltyDiscount` is valid, so we derive `pointsUsed` from it.
+      const pointsUsed = loyaltyDiscount > 0 ? loyaltyPointsToUse : 0;
 
       const saleDataForFirebase: Omit<Sale, 'id' | 'soldAt'> & { soldAt: any } = {
         billNumber: `B${Date.now()}`,
@@ -125,20 +135,29 @@ export default function PosPage() {
         paymentMode: paymentDetails.paymentMode,
         amountReceived: paymentDetails.paymentMode === 'Cash' ? Number(paymentDetails.amountReceived) : totalAmount,
         changeGiven: paymentDetails.paymentMode === 'Cash' ? Math.max(0, Number(paymentDetails.amountReceived) - totalAmount) : 0,
-        loyaltyPointsEarned: selectedCustomer ? Math.floor(totalAmount / 100) : 0,
-        loyaltyPointsUsed: loyaltyPointsToUse,
+        loyaltyPointsEarned: pointsEarned,
+        loyaltyPointsUsed: pointsUsed,
         soldAt: serverTimestamp(),
-        soldBy: user?.email || user?.uid || 'System',
+        // Use the profile from useAuth to record who sold the item
+        soldBy: profile?.email || profile?.uid || 'System',
       };
       const saleRef = doc(collection(db, "sales"));
       batch.set(saleRef, saleDataForFirebase);
       cart.forEach(item => { const productRef = doc(db, "products", item.productId); batch.update(productRef, { stock_quantity: increment(-item.quantity), updatedAt: serverTimestamp() }); });
-      if (selectedCustomer) { const customerRef = doc(db, "customers", selectedCustomer.id); const pointsChange = saleDataForFirebase.loyaltyPointsEarned - saleDataForFirebase.loyaltyPointsUsed; batch.update(customerRef, { loyaltyPoints: increment(pointsChange), updatedAt: serverTimestamp() }); }
+      
+      // **FIXED**: Correctly update customer's loyalty points
+      if (selectedCustomer) {
+        const customerRef = doc(db, "customers", selectedCustomer.id);
+        const pointsChange = pointsEarned - pointsUsed;
+        batch.update(customerRef, { loyaltyPoints: increment(pointsChange), updatedAt: serverTimestamp() });
+      }
+
       await batch.commit();
       const finalSaleObject: Sale = { ...saleDataForFirebase, id: saleRef.id, soldAt: Timestamp.now() };
       setLastSale(finalSaleObject);
       setCart([]);
       setDiscountValue('');
+      setLoyaltyPointsToUse(0); // Reset points used for next sale
     } catch (err) { console.error("Checkout failed:", err); alert("An error occurred during checkout. Please try again."); }
     finally { setIsSubmitting(false); }
   };
@@ -149,7 +168,7 @@ export default function PosPage() {
   return (
     <div className="bg-gray-100 text-black min-h-screen font-sans">
       <header className="flex justify-between items-center p-4 border-b border-gray-300 bg-white">
-        <div><h1 className="text-2xl font-bold text-gray-800">POS Terminal</h1><p className="text-sm text-gray-500">Logged in as {user?.email}</p></div>
+        <div><h1 className="text-2xl font-bold text-gray-800">POS Terminal</h1><p className="text-sm text-gray-500">Logged in as {profile?.email}</p></div>
       </header>
       <main className="grid grid-cols-1 md:grid-cols-5 gap-6 p-6 h-[calc(100vh-81px)]">
         <div className="md:col-span-3 h-full"><ProductSearchPanel key={saleKey} onAddToCart={handleAddToCart} /></div>
@@ -163,7 +182,7 @@ export default function PosPage() {
             onSelectCustomer={setSelectedCustomer}
             walkInName={walkInName}
             setWalkInName={setWalkInName}
-            subTotal={displaySubtotal} // This is the tax-inclusive subtotal for display
+            subTotal={displaySubtotal}
             loyaltyDiscount={loyaltyDiscount}
             totalAmount={totalAmount}
             loyaltyPointsToUse={loyaltyPointsToUse}

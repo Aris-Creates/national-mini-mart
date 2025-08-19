@@ -29,10 +29,10 @@ const docToProduct = (doc: DocumentData): Product => {
 
 // **NEW**: A helper to determine the actual price the customer pays.
 const getEffectivePrice = (product: Product): number => {
-    // Use sellingPrice if it's a valid, lower price; otherwise, use MRP.
-    return (product.sellingPrice && product.sellingPrice > 0 && product.sellingPrice < product.mrp)
-        ? product.sellingPrice
-        : product.mrp;
+  // Use sellingPrice if it's a valid, lower price; otherwise, use MRP.
+  return (product.sellingPrice && product.sellingPrice > 0 && product.sellingPrice < product.mrp)
+    ? product.sellingPrice
+    : product.mrp;
 };
 
 interface ProductSearchPanelProps {
@@ -59,60 +59,76 @@ export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
     fetchAllProducts();
   }, []);
 
-  useEffect(() => {
-    const searchProducts = async () => {
-      if (searchTerm.trim().length < 2) { setSearchResults([]); return; }
+
+useEffect(() => {
+    const searchProductsByBarcodePrefix = async () => {
+      if (searchTerm.trim().length < 3) { 
+        setSearchResults([]);
+        return;
+      }
+      
       setIsSearching(true);
       try {
-        const lowercasedTerm = searchTerm.toLowerCase();
-        // Note: Firestore search is case-sensitive. This query finds names that start with the term.
+        const trimmedTerm = searchTerm.trim();
+        // This query finds barcodes that start with the user's input.
         const q = query(
           collection(db, "products"),
-          where('name', '>=', lowercasedTerm),
-          where('name', '<=', lowercasedTerm + '\uf8ff'),
-          orderBy('name'),
+          where('barcode', '>=', trimmedTerm),
+          where('barcode', '<=', trimmedTerm + '\uf8ff'),
+          orderBy('barcode'), // Order by barcode for consistency
           limit(10)
         );
+        
         const snapshot = await getDocs(q);
         setSearchResults(snapshot.docs.map(docToProduct));
-      } catch (error) { console.error("Error searching products:", error); }
-      finally { setIsSearching(false); }
+
+      } catch (error) {
+        console.error("Error searching products by barcode prefix:", error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
     };
-    const debounce = setTimeout(() => searchProducts(), 300);
+
+    const debounce = setTimeout(() => {
+      searchProductsByBarcodePrefix();
+    }, 300);
+
     return () => clearTimeout(debounce);
+    
   }, [searchTerm]);
 
   const renderProductGrid = (products: Product[]) => (
     <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {products.map(product => {
-            // **FIXED**: Use the new helper to get the correct price and check for discounts.
-            const effectivePrice = getEffectivePrice(product);
-            const hasDiscount = effectivePrice < product.mrp;
+      {products.map(product => {
+        // **FIXED**: Use the new helper to get the correct price and check for discounts.
+        const effectivePrice = getEffectivePrice(product);
+        const hasDiscount = effectivePrice < product.mrp;
 
-            return (
-                <button key={product.id} onClick={() => onAddToCart(product)} disabled={product.stock_quantity <= 0}
-                  className="bg-white border border-gray-300 p-3 text-left transition-colors hover:bg-gray-100 flex flex-col justify-between h-32 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-100">
-                  <div>
-                    <p className="font-semibold text-sm text-gray-800 line-clamp-2">{product.name}</p>
-                    <p className="text-xs text-gray-500">{product.brand}</p>
-                  </div>
-                  
-                  {/* **FIXED**: New rendering logic to show savings */}
-                  <div>
-                    {hasDiscount && (
-                        <p className="text-xs text-gray-400 line-through">{formatCurrency(product.mrp)}</p>
-                    )}
-                    <p className={`text-base font-bold ${hasDiscount ? 'text-green-600' : 'text-blue-700'}`}>
-                        {formatCurrency(effectivePrice)}
-                    </p>
-                  </div>
-                  
-                  <p className={`text-xs font-bold ${product.stock_quantity > product.min_stock_level ? 'text-green-600' : product.stock_quantity > 0 ? 'text-orange-500' : 'text-red-600'}`}>
-                      Stock: {product.stock_quantity}
-                  </p>
-                </button>
-            )
-        })}
+        return (
+          <button key={product.id} onClick={() => onAddToCart(product)} disabled={product.stock_quantity <= 0}
+            className="bg-white border border-gray-300 p-3 text-left transition-colors hover:bg-gray-100 flex flex-col justify-between h-32 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-100">
+            <div>
+              <p className="font-semibold text-sm text-gray-800 line-clamp-2">{product.name}</p>
+              <p className="text-xs text-gray-500">{product.brand}</p>
+            </div>
+
+            {/* **FIXED**: New rendering logic to show savings */}
+            <div>
+              {hasDiscount && (
+                <p className="text-xs text-gray-400 line-through">{formatCurrency(product.mrp)}</p>
+              )}
+              <p className={`text-base font-bold ${hasDiscount ? 'text-green-600' : 'text-blue-700'}`}>
+                {formatCurrency(effectivePrice)}
+              </p>
+            </div>
+
+            <p className={`text-xs font-bold ${product.stock_quantity > product.min_stock_level ? 'text-green-600' : product.stock_quantity > 0 ? 'text-orange-500' : 'text-red-600'}`}>
+              Stock: {product.stock_quantity}
+            </p>
+          </button>
+        )
+      })}
     </div>
   );
 
@@ -128,15 +144,15 @@ export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
         {searchTerm.length < 2 ? (
           <div>
             <h3 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Browse Products</h3>
-            {isLoading ? ( <div className="flex justify-center items-center h-48"><Loader2 className="animate-spin text-gray-400" size={32}/></div> )
-             : allProducts.length > 0 ? ( renderProductGrid(allProducts) )
-             : ( <p className="text-gray-500 text-center py-4">No products found in your inventory.</p> )}
+            {isLoading ? (<div className="flex justify-center items-center h-48"><Loader2 className="animate-spin text-gray-400" size={32} /></div>)
+              : allProducts.length > 0 ? (renderProductGrid(allProducts))
+                : (<p className="text-gray-500 text-center py-4">No products found in your inventory.</p>)}
           </div>
         ) : (
           <div>
             <h3 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Search Results</h3>
             {isSearching && <p className="text-gray-500 text-center py-4">Searching...</p>}
-            {!isSearching && searchResults.length === 0 && ( <p className="text-gray-500 text-center py-4">No products found for "{searchTerm}".</p> )}
+            {!isSearching && searchResults.length === 0 && (<p className="text-gray-500 text-center py-4">No products found for "{searchTerm}".</p>)}
             {renderProductGrid(searchResults)}
           </div>
         )}

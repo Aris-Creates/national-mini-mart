@@ -49,6 +49,7 @@ export function OrderPanel(props: OrderPanelProps) {
         additionalDiscountAmount, discountType, onDiscountTypeChange, discountValue, onDiscountValueChange
     } = props;
 
+    // ... customer search and other state remains the same ...
     const [paymentMode, setPaymentMode] = useState<'Cash' | 'Card' | 'UPI'>('Cash');
     const [amountReceived, setAmountReceived] = useState<number | ''>('');
     const [customerSearchTerm, setCustomerSearchTerm] = useState('');
@@ -83,8 +84,6 @@ export function OrderPanel(props: OrderPanelProps) {
     }
 
     const roundOffAmount = totalAmount - (subTotal - additionalDiscountAmount - loyaltyDiscount);
-
-    // **FIXED**: Calculate total savings from all sources for a clear summary.
     const productSavings = cart.reduce((acc, item) => acc + (item.mrp - item.priceAtSale) * item.quantity, 0);
     const totalSavings = productSavings + additionalDiscountAmount + loyaltyDiscount;
 
@@ -97,12 +96,17 @@ export function OrderPanel(props: OrderPanelProps) {
     const equivalentPercent = subTotal > 0 ? (additionalDiscountAmount / subTotal * 100) : 0;
     const equivalentFixed = additionalDiscountAmount;
 
+    // **FIXED**: The loyalty points input is now disabled if the cart total is zero,
+    // and the maximum value is correctly enforced by the `useSaleCalculations` hook.
+    const maxPointsCanUse = loyaltyDiscount / 5;
+
     return (
         <div className="bg-white border border-gray-200 flex flex-col h-full">
             <h2 className="text-xl font-bold text-gray-800 p-4 border-b border-gray-200">Current Order</h2>
-
+            {/* Customer Section */}
             <div className="p-4 border-b border-gray-200">
-                {selectedCustomer ? (
+              {/* ... customer display logic ... */}
+              {selectedCustomer ? (
                     <div className="bg-gray-100 p-3 border border-gray-200">
                         <div className="flex justify-between items-start">
                             <div>
@@ -135,9 +139,10 @@ export function OrderPanel(props: OrderPanelProps) {
                     </div>
                 )}
             </div>
-
+            {/* Cart Items */}
             <div className="flex-grow overflow-y-auto p-4 space-y-3">
-                {cart.length === 0 ? (
+              {/* ... cart item mapping logic ... */}
+              {cart.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-400">
                         <PackagePlus size={48} className="mb-2" />
                         <p>Your cart is empty</p>
@@ -146,7 +151,6 @@ export function OrderPanel(props: OrderPanelProps) {
                     <div key={item.productId} className="flex items-center gap-3">
                         <div className="flex-grow">
                             <p className="font-medium text-sm text-gray-800 truncate">{item.productName}</p>
-                            {/* **FIXED**: Display logic now shows savings clearly */}
                             <div className="flex items-baseline gap-2">
                                 <p className="text-sm font-bold text-blue-700">{formatCurrency(item.priceAtSale)}</p>
                                 {item.priceAtSale < item.mrp && (
@@ -159,20 +163,18 @@ export function OrderPanel(props: OrderPanelProps) {
                             <span className="w-6 text-center font-bold">{item.quantity}</span>
                             <Button variant="secondary" className="h-7 w-7" onClick={() => onUpdateQuantity(item.productId, item.quantity + 1)}><Plus size={14} /></Button>
                         </div>
-                        {/* **FIXED**: Line total is based on the actual sale price */}
                         <p className="font-semibold w-24 text-right">{formatCurrency(item.priceAtSale * item.quantity)}</p>
                     </div>
                 ))}
             </div>
-
+            {/* Billing & Checkout */}
             {cart.length > 0 && (
                 <div className="p-4 border-t border-gray-200 bg-gray-50">
                     <div className="space-y-2 text-sm mb-4">
                         <div className="flex justify-between text-gray-700"><span>Subtotal</span><span>{formatCurrency(subTotal)}</span></div>
-                        
-                        {/* Discount section remains the same */}
                         <div className="border-y border-gray-200 py-3 space-y-2">
-                            <label className="block text-sm font-medium text-gray-600">Additional Discount</label>
+                          {/* ... discount input logic ... */}
+                          <label className="block text-sm font-medium text-gray-600">Additional Discount</label>
                             <div className="flex gap-2">
                                 <div className="relative flex-grow">
                                     <Input type="number" className="pl-8" placeholder="0.00" value={discountType === 'percentage' ? discountValue : equivalentPercent.toFixed(2)} onChange={(e) => handleDiscountInputChange('percentage', e.target.value)} onFocus={() => onDiscountTypeChange('percentage')} />
@@ -184,27 +186,27 @@ export function OrderPanel(props: OrderPanelProps) {
                                 </div>
                             </div>
                         </div>
-
-                        {/* **NEW**: Display total savings for clarity */}
-                        {totalSavings > 0 && (
-                            <div className="flex justify-between font-medium text-green-600">
-                                <span>Total Savings</span>
-                                <span>- {formatCurrency(totalSavings)}</span>
+                        {totalSavings > 0 && ( <div className="flex justify-between font-medium text-green-600"> <span>Total Savings</span> <span>- {formatCurrency(totalSavings)}</span> </div> )}
+                        {/* **FIXED**: Loyalty points input now has a max attribute for better UX */}
+                        {selectedCustomer && selectedCustomer.loyaltyPoints > 0 && (
+                            <div className="flex justify-between items-center text-gray-700">
+                                <span>Use Points ({selectedCustomer.loyaltyPoints})</span>
+                                <Input type="number" className="h-8 w-24 text-right bg-white" value={loyaltyPointsToUse || ''}
+                                       max={maxPointsCanUse}
+                                       disabled={totalAmount <= 0}
+                                       onChange={(e) => onLoyaltyPointsChange(parseInt(e.target.value) || 0)}
+                                />
                             </div>
                         )}
-
-                        {loyaltyPointsToUse > 0 && <div className="flex justify-between text-green-600"><span>Loyalty Discount</span><span>- {formatCurrency(loyaltyDiscount)}</span></div>}
-                        
+                        {loyaltyDiscount > 0 && (<div className="flex justify-between text-green-600"><span>Loyalty Discount</span><span>- {formatCurrency(loyaltyDiscount)}</span></div>)}
                         <div className="flex justify-between text-gray-600"><span>Round Off</span><span>{roundOffAmount.toFixed(2)}</span></div>
                     </div>
-
+                    {/* ... total and payment logic ... */}
                     <div className="flex justify-between items-center font-bold text-2xl border-t border-gray-300 pt-3 my-3">
                         <span className="text-gray-800">Total</span>
                         <span className="text-blue-700">{formatCurrency(totalAmount)}</span>
                     </div>
-
                     <div>
-                        {/* Payment controls remain the same */}
                         <div className="grid grid-cols-3 gap-2 mb-4">
                             <button onClick={() => setPaymentMode('Cash')} className={`py-2 flex items-center justify-center gap-2 text-sm transition-colors ${paymentMode === 'Cash' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}><Wallet size={16} /> Cash</button>
                             <button onClick={() => setPaymentMode('Card')} className={`py-2 flex items-center justify-center gap-2 text-sm transition-colors ${paymentMode === 'Card' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}><CreditCard size={16} /> Card</button>
