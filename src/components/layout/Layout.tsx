@@ -100,11 +100,7 @@ const Layout: React.FC = () => {
 
       {/* --- Main Content Area (Stays Light) --- */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        
-        {/* Header - Light Theme */}
-        <header className="flex items-center justify-between p-4 border-b border-gray-200 bg-white h-16 shrink-0">
-          <h2 className="text-xl font-semibold text-gray-800">{pageTitle}</h2>
-        </header>
+
 
         {/* Child route content - Light Theme */}
         <main className="flex-1 p-6 overflow-y-auto bg-gray-100">
@@ -113,7 +109,7 @@ const Layout: React.FC = () => {
 
         {/* --- FOOTER: Themed to match the dark sidebar --- */}
         <footer className="p-4 border-t border-zinc-700 bg-zinc-900 text-center text-sm text-zinc-400 shrink-0">
-          &copy; {new Date().getFullYear()} NMM V2.10.02. All Rights Reserved.<br />
+          &copy; {new Date().getFullYear()} NMM V2.10.03. All Rights Reserved.<br />
           Designed and Developed by Aris Innovations
         </footer>
       </div>

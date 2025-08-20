@@ -168,7 +168,7 @@ export default function PosPage() {
   return (
     <div className="bg-gray-100 text-black min-h-screen font-sans">
       <header className="flex justify-between items-center p-4 border-b border-gray-300 bg-white">
-        <div><h1 className="text-2xl font-bold text-gray-800">POS Terminal</h1><p className="text-sm text-gray-500">Logged in as {profile?.email}</p></div>
+        <div><h1 className="text-2xl font-bold text-gray-800">POS</h1><p className="text-sm text-gray-500">Logged in as {profile?.email}</p></div>
       </header>
       <main className="grid grid-cols-1 md:grid-cols-5 gap-6 p-6 h-[calc(100vh-81px)]">
         <div className="md:col-span-3 h-full"><ProductSearchPanel key={saleKey} onAddToCart={handleAddToCart} /></div>
