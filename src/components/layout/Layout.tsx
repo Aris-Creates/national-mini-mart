@@ -110,7 +110,7 @@ const Layout: React.FC = () => {
         {/* --- FOOTER: Themed to match the dark sidebar --- */}
         <footer className="p-4 border-t border-zinc-700 bg-zinc-900 text-center text-sm text-zinc-400 shrink-0">
           &copy; {new Date().getFullYear()} NMM V2.10.03. All Rights Reserved.<br />
-          Designed and Developed by Aris Innovations
+          Brought to life by Aris Innovations
         </footer>
       </div>
     </div>
