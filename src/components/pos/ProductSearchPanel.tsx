@@ -60,30 +60,58 @@ export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
   }, []);
 
 
-useEffect(() => {
-    const searchProductsByBarcodePrefix = async () => {
-      if (searchTerm.trim().length < 3) { 
+  // **MODIFIED**: This effect now searches by both product name and barcode.
+  useEffect(() => {
+    const performSearch = async () => {
+      // Match the render condition: search when term is 2 chars or more.
+      if (searchTerm.trim().length < 2) {
         setSearchResults([]);
         return;
       }
-      
+
       setIsSearching(true);
       try {
         const trimmedTerm = searchTerm.trim();
-        // This query finds barcodes that start with the user's input.
-        const q = query(
+
+        // Query 1: Search by barcode prefix
+        const barcodeQuery = query(
           collection(db, "products"),
           where('barcode', '>=', trimmedTerm),
           where('barcode', '<=', trimmedTerm + '\uf8ff'),
-          orderBy('barcode'), // Order by barcode for consistency
+          orderBy('barcode'),
           limit(10)
         );
-        
-        const snapshot = await getDocs(q);
-        setSearchResults(snapshot.docs.map(docToProduct));
+
+        // Query 2: Search by name prefix (case-sensitive)
+        const nameQuery = query(
+          collection(db, "products"),
+          where('name', '>=', trimmedTerm),
+          where('name', '<=', trimmedTerm + '\uf8ff'),
+          orderBy('name'),
+          limit(10)
+        );
+
+        // Execute both queries in parallel for efficiency
+        const [barcodeSnapshot, nameSnapshot] = await Promise.all([
+          getDocs(barcodeQuery),
+          getDocs(nameQuery),
+        ]);
+
+        // Merge and deduplicate results using a Map
+        const productsMap = new Map<string, Product>();
+
+        barcodeSnapshot.docs.forEach(doc => {
+          productsMap.set(doc.id, docToProduct(doc));
+        });
+
+        nameSnapshot.docs.forEach(doc => {
+          productsMap.set(doc.id, docToProduct(doc));
+        });
+
+        setSearchResults(Array.from(productsMap.values()));
 
       } catch (error) {
-        console.error("Error searching products by barcode prefix:", error);
+        console.error("Error searching products by name or barcode:", error);
         setSearchResults([]);
       } finally {
         setIsSearching(false);
@@ -91,11 +119,11 @@ useEffect(() => {
     };
 
     const debounce = setTimeout(() => {
-      searchProductsByBarcodePrefix();
+      performSearch();
     }, 300);
 
     return () => clearTimeout(debounce);
-    
+
   }, [searchTerm]);
 
   const renderProductGrid = (products: Product[]) => (
