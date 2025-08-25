@@ -1,4 +1,3 @@
-// src/pages/ReportsPage.tsx
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, Timestamp, DocumentData } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -8,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // --- UI Components & Utils ---
 import { Button } from '../components/ui/Button';
 import { formatCurrency } from '../utils/formatCurrency';
-import { TrendingUp, Package, Receipt } from 'lucide-react';
+import { TrendingUp, Package, Receipt, User } from 'lucide-react'; // Added User icon
 
 // --- Type Definitions ---
 interface ReportData {
@@ -20,14 +19,22 @@ interface ChartDataPoint {
   date: string;
   sales: number;
 }
+interface SalespersonReport {
+  name: string;
+  email: string;
+  totalSales: number;
+  transactions: number;
+  itemsSold: number;
+}
 
 // --- Type-Safe Converter (Summarized for reporting) ---
-const docToSaleSummary = (doc: DocumentData): { totalAmount: number; items: SaleItem[]; soldAt: Timestamp } => {
+const docToSaleSummary = (doc: DocumentData): { totalAmount: number; items: SaleItem[]; soldAt: Timestamp; soldBy: string } => {
   const data = doc.data();
   return {
     totalAmount: data.totalAmount || 0,
     items: data.items || [],
     soldAt: data.soldAt as Timestamp,
+    soldBy: data.soldBy || 'Unknown', // Capture the salesperson's email
   };
 };
 
@@ -56,6 +63,7 @@ export default function ReportsPage() {
   const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [salespersonReport, setSalespersonReport] = useState<SalespersonReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +73,7 @@ export default function ReportsPage() {
       setError(null);
       setReportData(null);
       setChartData([]);
+      setSalespersonReport([]);
 
       const now = new Date();
       let startDate = new Date();
@@ -84,14 +93,52 @@ export default function ReportsPage() {
         
         const rawSales = querySnapshot.docs.map(docToSaleSummary);
 
+        // --- Process for main report cards ---
         rawSales.forEach(sale => {
           totalSales += sale.totalAmount;
-          // The SaleItem structure has the quantity
           sale.items.forEach(item => { itemsSold += item.quantity; });
         });
-
         setReportData({ totalSales, itemsSold, transactions });
         setChartData(processSalesForChart(rawSales));
+
+        // --- Process data for Sales by Person report ---
+        const salesByPerson: { [email: string]: { totalSales: number; transactions: number; itemsSold: number } } = {};
+        rawSales.forEach(sale => {
+          const email = sale.soldBy;
+          if (!salesByPerson[email]) {
+            salesByPerson[email] = { totalSales: 0, transactions: 0, itemsSold: 0 };
+          }
+          salesByPerson[email].totalSales += sale.totalAmount;
+          salesByPerson[email].transactions += 1;
+          sale.items.forEach(item => {
+            salesByPerson[email].itemsSold += item.quantity;
+          });
+        });
+
+        const emails = Object.keys(salesByPerson);
+
+        if (emails.length > 0) {
+          // Fetch user names corresponding to the emails. Note: Firestore 'in' query is limited to 30 elements.
+          const usersQuery = query(collection(db, "users"), where("email", "in", emails));
+          const usersSnapshot = await getDocs(usersQuery);
+          
+          const userMap = new Map<string, string>(); // Map email -> name
+          usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            userMap.set(userData.email, userData.fullName || 'Unnamed User');
+          });
+
+          // Combine sales data with user names
+          const finalReportData = Object.entries(salesByPerson)
+            .map(([email, data]) => ({
+              email,
+              name: userMap.get(email) || email, // Fallback to email if user not found in 'users' collection
+              ...data,
+            }))
+            .sort((a, b) => b.totalSales - a.totalSales); // Sort by highest sales
+
+          setSalespersonReport(finalReportData);
+        }
 
       } catch (err) {
         console.error("Error fetching sales report:", err);
@@ -188,6 +235,52 @@ export default function ReportsPage() {
               <p className="text-gray-500">No sales data available for this period to display a chart.</p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* --- Sales by Person Report Table --- */}
+      <div className="mt-6 bg-white p-6 border border-gray-200">
+        <h2 className="text-xl font-bold mb-4 text-gray-700 flex items-center gap-2">
+          <User size={20} /> Sales by Person
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Salesperson</th>
+                <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
+                <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Transactions</th>
+                <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Items Sold</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {isLoading ? (
+                Array(3).fill(0).map((_, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap"><div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div></td>
+                    <td className="px-6 py-4 whitespace-nowrap"><div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div></td>
+                    <td className="px-6 py-4 whitespace-nowrap"><div className="h-4 bg-gray-200 rounded animate-pulse w-1/4"></div></td>
+                    <td className="px-6 py-4 whitespace-nowrap"><div className="h-4 bg-gray-200 rounded animate-pulse w-1/4"></div></td>
+                  </tr>
+                ))
+              ) : salespersonReport.length > 0 ? (
+                salespersonReport.map((person) => (
+                  <tr key={person.email}>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{person.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700">{formatCurrency(person.totalSales)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700">{person.transactions.toLocaleString('en-IN')}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700">{person.itemsSold.toLocaleString('en-IN')}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="text-center py-10 text-gray-500">
+                    No sales data available for individual reporting in this period.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
