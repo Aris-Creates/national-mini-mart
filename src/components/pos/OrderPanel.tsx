@@ -225,7 +225,7 @@ export function OrderPanel(props: OrderPanelProps) {
                             disabled={isSubmitting || cart.length === 0}
                             className="w-full text-lg font-bold bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400 transition-colors"
                         >
-                            {isSubmitting ? "Processing..." : `Pay Now`}
+                            {isSubmitting ? "Processing..." : `Bill & Collect ${formatCurrency(totalAmount)}`}
                         </Button>
                     </div>
                 </div>

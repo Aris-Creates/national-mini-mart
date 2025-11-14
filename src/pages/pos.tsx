@@ -195,7 +195,7 @@ export default function PosPage() {
         </div>
       </main>
       {lastSale && (<SaleCompleteOverlay lastSale={lastSale} onPrint={handlePrint} onNewSale={handleNewSale} />)}
-      <div className="hidden">{lastSale && <ThermalLayout ref={receiptRef} sale={lastSale} storeDetails={{ name: "Your Store Name", address: "123 Main St", phone: "555-123-4567" }} />}</div>
+      <div className="hidden">{lastSale && <ThermalLayout ref={receiptRef} sale={lastSale} storeDetails={{ name: "National Mini Mart", address: "123 Main St", phone: "555-123-4567" }} />}</div>
     </div>
   );
 }

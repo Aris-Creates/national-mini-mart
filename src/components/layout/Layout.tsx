@@ -29,10 +29,9 @@ function NavItem({ href, children, icon: Icon }: { href: string; children: React
     <NavLink
       to={href}
       className={({ isActive }) =>
-        `flex items-center p-3 text-sm font-medium transition-colors rounded-md ${
-          isActive
-            ? 'bg-zinc-700 text-white' // Active state: A lighter, solid gray
-            : 'text-zinc-400 hover:text-white hover:bg-zinc-700/50' // Inactive: Muted, brightens on hover
+        `flex items-center p-3 text-sm font-medium transition-colors rounded-md ${isActive
+          ? 'bg-zinc-700 text-white' // Active state: A lighter, solid gray
+          : 'text-zinc-400 hover:text-white hover:bg-zinc-700/50' // Inactive: Muted, brightens on hover
         }`
       }
     >
@@ -47,7 +46,7 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const accessibleNavItems = allNavItems.filter(item => 
+  const accessibleNavItems = allNavItems.filter(item =>
     profile && item.roles.includes(profile.role)
   );
 
@@ -65,7 +64,7 @@ const Layout: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      
+
       {/* --- NEW THEME: Dark Zinc Sidebar --- */}
       <aside className="w-64 bg-zinc-900 text-zinc-100 p-4 flex flex-col border-r border-zinc-700">
         <div className="text-center mb-10">
@@ -110,7 +109,7 @@ const Layout: React.FC = () => {
         {/* --- FOOTER: Themed to match the dark sidebar --- */}
         <footer className="p-4 border-t border-zinc-700 bg-zinc-900 text-center text-sm text-zinc-400 shrink-0">
           &copy; {new Date().getFullYear()} NMM V2.10.03. All Rights Reserved.<br />
-          Brought to life by Aris Innovations
+          Brought to life by <a href="https://arisinnovations.in" target="_blank" rel="noopener noreferrer"> Aris Innovations</a>
         </footer>
       </div>
     </div>

@@ -14,7 +14,7 @@ interface ThermalLayoutProps {
 
 // --- CONFIGURATION FOR CHARACTER-BASED LAYOUT ---
 // This is the total number of characters available on a standard 80mm receipt line.
-const LINE_CHAR_COUNT = 42; 
+const LINE_CHAR_COUNT = 42;
 
 // Column widths are precisely defined. The sum of widths + spaces between them must be <= LINE_CHAR_COUNT.
 // 18 (Name) + 1 + 4 (Qty) + 1 + 8 (Price) + 1 + 8 (Total) = 41 characters. This fits perfectly.
@@ -48,7 +48,7 @@ const formatItemLine = (name: string, qty: number, price: number, total: number)
   const formattedQty = String(qty).padStart(QTY_WIDTH);
   const formattedPrice = formatCurrency(price, { showSymbol: false }).padStart(PRICE_WIDTH);
   const formattedTotal = formatCurrency(total, { showSymbol: false }).padStart(TOTAL_WIDTH);
-  
+
   // Combine all parts with single spaces as separators
   return `${formattedName} ${formattedQty} ${formattedPrice} ${formattedTotal}`;
 };
@@ -78,9 +78,9 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
 
   // Header Line
   receiptBodyLines.push(
-    'Item'.padEnd(NAME_WIDTH) + ' ' + 
-    'Qty'.padStart(QTY_WIDTH) + ' ' + 
-    'Price'.padStart(PRICE_WIDTH) + ' ' + 
+    'Item'.padEnd(NAME_WIDTH) + ' ' +
+    'Qty'.padStart(QTY_WIDTH) + ' ' +
+    'Price'.padStart(PRICE_WIDTH) + ' ' +
     'Total'.padStart(TOTAL_WIDTH)
   );
   receiptBodyLines.push(dashedLine);
@@ -101,7 +101,7 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
   if (productSavings > 0) receiptBodyLines.push(formatTotalLine('Item Savings', `- ${formatCurrency(productSavings)}`));
   if (additionalDiscount > 0) receiptBodyLines.push(formatTotalLine('Cart Discount', `- ${formatCurrency(additionalDiscount)}`));
   if (loyaltyDiscount > 0) receiptBodyLines.push(formatTotalLine(`Loyalty (${sale.loyaltyPointsUsed} pts)`, `- ${formatCurrency(loyaltyDiscount)}`));
-  
+
   // Subtotal before tax
   const subTotalBeforeTax = sale.totalAmount - sale.roundOff - sale.gst;
   receiptBodyLines.push(formatTotalLine('Subtotal', formatCurrency(subTotalBeforeTax)));
@@ -134,10 +134,14 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
     >
       {/* --- Store Header --- */}
       <div className="text-center mb-2">
-        <h1 className="font-bold text-sm uppercase">{storeDetails.name}</h1>
-        <p className="text-[10px]">{storeDetails.address}</p>
-        <p className="text-[10px]">Ph: {storeDetails.phone}</p>
+        <h1 className="font-bold text-sm uppercase">National Mini Mart</h1>
+        <p className="text-[10px]">140/115, Hospital Road</p>
+        <p className="text-[10px]">Ooty, 643091</p>
+        <p className="text-[10px]">Ph: 0423 2446089</p>
+        <p className="text-[10px]">Mob: 9092484510</p>
+        <p className="text-[10px]">GST No: 33AUBPM5493L1ZA</p>
       </div>
+
 
       {/* --- Bill Meta Info --- */}
       <div className="border-t border-b border-dashed border-black py-1 text-[11px]">
