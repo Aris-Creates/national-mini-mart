@@ -47,7 +47,7 @@ const processSalesForChart = (sales: { totalAmount: number; soldAt: Timestamp }[
   sales.forEach(sale => {
     const date = sale.soldAt.toDate();
     const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    
+
     const currentSales = dailySales.get(dateString) || 0;
     dailySales.set(dateString, currentSales + sale.totalAmount);
   });
@@ -55,7 +55,7 @@ const processSalesForChart = (sales: { totalAmount: number; soldAt: Timestamp }[
   // Convert map to array and sort by date for a proper time-series chart
   const sortedChartData = Array.from(dailySales, ([date, sales]) => ({ date, sales }))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
+
   return sortedChartData;
 };
 
@@ -90,7 +90,7 @@ export default function ReportsPage() {
         let totalSales = 0;
         let itemsSold = 0;
         const transactions = querySnapshot.size;
-        
+
         const rawSales = querySnapshot.docs.map(docToSaleSummary);
 
         // --- Process for main report cards ---
@@ -121,7 +121,7 @@ export default function ReportsPage() {
           // Fetch user names corresponding to the emails. Note: Firestore 'in' query is limited to 30 elements.
           const usersQuery = query(collection(db, "users"), where("email", "in", emails));
           const usersSnapshot = await getDocs(usersQuery);
-          
+
           const userMap = new Map<string, string>(); // Map email -> name
           usersSnapshot.forEach(doc => {
             const userData = doc.data();
@@ -167,22 +167,22 @@ export default function ReportsPage() {
       return (
         <>
           <div className="bg-white p-6 border border-gray-200">
-            <h3 className="text-gray-500 uppercase text-sm font-semibold flex items-center gap-2 mb-2"><TrendingUp size={16}/> Total Sales</h3>
+            <h3 className="text-gray-500 uppercase text-sm font-semibold flex items-center gap-2 mb-2"><TrendingUp size={16} /> Total Sales</h3>
             <p className="text-3xl font-bold text-gray-800">{formatCurrency(reportData.totalSales)}</p>
           </div>
           <div className="bg-white p-6 border border-gray-200">
-            <h3 className="text-gray-500 uppercase text-sm font-semibold flex items-center gap-2 mb-2"><Package size={16}/> Items Sold</h3>
+            <h3 className="text-gray-500 uppercase text-sm font-semibold flex items-center gap-2 mb-2"><Package size={16} /> Items Sold</h3>
             <p className="text-3xl font-bold text-gray-800">{reportData.itemsSold.toLocaleString('en-IN')}</p>
           </div>
           <div className="bg-white p-6 border border-gray-200">
-            <h3 className="text-gray-500 uppercase text-sm font-semibold flex items-center gap-2 mb-2"><Receipt size={16}/> Total Transactions</h3>
+            <h3 className="text-gray-500 uppercase text-sm font-semibold flex items-center gap-2 mb-2"><Receipt size={16} /> Total Transactions</h3>
             <p className="text-3xl font-bold text-gray-800">{reportData.transactions.toLocaleString('en-IN')}</p>
           </div>
         </>
       );
     }
     return null;
-  };  
+  };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -203,13 +203,39 @@ export default function ReportsPage() {
           <h1 className="text-3xl font-bold text-gray-800">Sales Reports</h1>
           <p className="text-gray-500">View key metrics for your sales performance</p>
         </div>
-        <div className="flex space-x-1 p-1 bg-gray-200">
-          <Button className={`${timeRange === 'daily' ? 'bg-blue-600 text-white' : 'bg-transparent text-gray-700 hover:bg-gray-300'}`} onClick={() => setTimeRange('daily')}>Daily</Button>
-          <Button className={`${timeRange === 'weekly' ? 'bg-blue-600 text-white' : 'bg-transparent text-gray-700 hover:bg-gray-300'}`} onClick={() => setTimeRange('weekly')}>Weekly</Button>
-          <Button className={`${timeRange === 'monthly' ? 'bg-blue-600 text-white' : 'bg-transparent text-gray-700 hover:bg-gray-300'}`} onClick={() => setTimeRange('monthly')}>Monthly</Button>
+        <div className="flex space-x-1 p-1 bg-gray-400">
+          <Button
+            className={`${timeRange === 'daily'
+                ? 'bg-blue-600 text-white'
+                : 'bg-transparent text-gray-700 hover:bg-gray-300'
+              }`}
+            onClick={() => setTimeRange('daily')}
+          >
+            Daily
+          </Button>
+
+          <Button
+            className={`${timeRange === 'weekly'
+                ? 'bg-blue-600 text-white'
+                : 'bg-transparent text-gray-700 hover:bg-gray-300'
+              }`}
+            onClick={() => setTimeRange('weekly')}
+          >
+            Weekly
+          </Button>
+
+          <Button
+            className={`${timeRange === 'monthly'
+                ? 'bg-blue-600 text-white'
+                : 'bg-transparent text-gray-700 hover:bg-gray-300'
+              }`}
+            onClick={() => setTimeRange('monthly')}
+          >
+            Monthly
+          </Button>
         </div>
       </header>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         {renderMetricCards()}
       </div>
