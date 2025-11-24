@@ -8,6 +8,8 @@ interface ThermalLayoutProps {
     name: string;
     address: string;
     phone: string;
+    mobile: string;
+    gst: string;
   };
 }
 
@@ -124,8 +126,11 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
         {/* Store Header */}
         <div className="text-center mb-2">
           <h1 className="font-bold text-sm uppercase">{storeDetails.name}</h1>
+          {/* Include full address, mobile and GST number */}
           <p className="text-[10px]">{storeDetails.address}</p>
           <p className="text-[10px]">Ph: {storeDetails.phone}</p>
+          <p className="text-[10px]">Mob: {storeDetails.mobile}</p>
+          <p className="text-[10px]">GST No: {storeDetails.gst}</p>
         </div>
 
         {/* Bill Meta Info */}

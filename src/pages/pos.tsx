@@ -15,26 +15,26 @@ import { SaleCompleteOverlay } from '../components/pos/SaleCompleteOverlay';
 import { useSaleCalculations } from '../hooks/useSaleCalculations';
 
 const docToProduct = (doc: DocumentData): Product => {
-    const data = doc.data();
-    return {
-        id: doc.id,
-        name: data.name || '',
-        costPrice: data.costPrice || 0,
-        mrp: data.mrp || 0,
-        sellingPrice: data.sellingPrice,
-        stock_quantity: data.stock_quantity || 0,
-        min_stock_level: data.min_stock_level || 0,
-        gst_rate: data.gst_rate || 0,
-        hsn_code: data.hsn_code || '',
-        brand: data.brand || '',
-        barcode: data.barcode || '',
-        createdAt: data.createdAt as Timestamp,
-        updatedAt: data.updatedAt as Timestamp,
-    };
+  const data = doc.data();
+  return {
+    id: doc.id,
+    name: data.name || '',
+    costPrice: data.costPrice || 0,
+    mrp: data.mrp || 0,
+    sellingPrice: data.sellingPrice,
+    stock_quantity: data.stock_quantity || 0,
+    min_stock_level: data.min_stock_level || 0,
+    gst_rate: data.gst_rate || 0,
+    hsn_code: data.hsn_code || '',
+    brand: data.brand || '',
+    barcode: data.barcode || '',
+    createdAt: data.createdAt as Timestamp,
+    updatedAt: data.updatedAt as Timestamp,
+  };
 };
 
 export default function PosPage() {
-  const { profile } = useAuth(); 
+  const { profile } = useAuth();
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [walkInName, setWalkInName] = useState('');
@@ -45,7 +45,7 @@ export default function PosPage() {
   const [saleKey, setSaleKey] = useState(1);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState<number | ''>('');
-  
+
   // NEW: State to trigger the direct-to-print workflow
   const [shouldPrintOnSaleComplete, setShouldPrintOnSaleComplete] = useState(false);
 
@@ -116,7 +116,7 @@ export default function PosPage() {
 
     // NEW: Set the print trigger flag based on how this function was called.
     setShouldPrintOnSaleComplete(andThenPrint);
-    
+
     setIsSubmitting(true);
     try {
       const batch = writeBatch(db);
@@ -146,7 +146,7 @@ export default function PosPage() {
       const saleRef = doc(collection(db, "sales"));
       batch.set(saleRef, saleDataForFirebase);
       cart.forEach(item => { const productRef = doc(db, "products", item.productId); batch.update(productRef, { stock_quantity: increment(-item.quantity), updatedAt: serverTimestamp() }); });
-      
+
       if (selectedCustomer) {
         const customerRef = doc(db, "customers", selectedCustomer.id);
         const pointsChange = pointsEarned - pointsUsed;
@@ -155,9 +155,9 @@ export default function PosPage() {
 
       await batch.commit();
       const finalSaleObject: Sale = { ...saleDataForFirebase, id: saleRef.id, soldAt: Timestamp.now() };
-      
+
       // Setting lastSale will trigger the overlay OR our new print effect
-      setLastSale(finalSaleObject); 
+      setLastSale(finalSaleObject);
 
       // Reset cart state for the next sale (customer is reset in handleNewSale)
       setCart([]);
@@ -166,7 +166,7 @@ export default function PosPage() {
     } catch (err) { console.error("Checkout failed:", err); alert("An error occurred during checkout. Please try again."); }
     finally { setIsSubmitting(false); }
   };
-  
+
   const handlePrint = useCallback(() => {
     if (receiptRef.current) {
       printThermalReceipt(receiptRef.current);
@@ -188,10 +188,10 @@ export default function PosPage() {
     if (shouldPrintOnSaleComplete && lastSale && receiptRef.current) {
       // Trigger the print function
       handlePrint();
-      
+
       // Immediately reset for the next sale, bypassing overlay interaction.
-      handleNewSale(); 
-      
+      handleNewSale();
+
       // Reset the trigger flag.
       setShouldPrintOnSaleComplete(false);
     }
@@ -226,18 +226,30 @@ export default function PosPage() {
             onDiscountValueChange={setDiscountValue} />
         </div>
       </main>
-      
+
       {/* MODIFIED: Don't show overlay if we are in the direct-to-print flow */}
       {lastSale && !shouldPrintOnSaleComplete && (
-        <SaleCompleteOverlay 
-          lastSale={lastSale} 
-          onPrint={handlePrint} 
-          onNewSale={handleNewSale} 
+        <SaleCompleteOverlay
+          lastSale={lastSale}
+          onPrint={handlePrint}
+          onNewSale={handleNewSale}
         />
       )}
 
       <div className="hidden">
-        {lastSale && <ThermalLayout ref={receiptRef} sale={lastSale} storeDetails={{ name: "National Mini Mart", address: "123 Main St", phone: "555-123-4567" }} />}
+        {lastSale && (
+          <ThermalLayout
+            ref={receiptRef}
+            sale={lastSale}
+            storeDetails={{
+              name: "National Mini Mart",
+              address: "140/115, Hospital Road, Ooty, 643091",
+              phone: "0423 2446089",
+              mobile: "9092484510",
+              gst: "33AUBPM5493L1ZA"
+            }}
+          />
+        )}
       </div>
     </div>
   );
