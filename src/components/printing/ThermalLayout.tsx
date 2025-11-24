@@ -1,4 +1,3 @@
-// src/components/printing/ThermalLayout.tsx
 import React from 'react';
 import { Sale } from '../../types/sale';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -13,11 +12,9 @@ interface ThermalLayoutProps {
 }
 
 // --- CONFIGURATION FOR CHARACTER-BASED LAYOUT ---
-// This is the total number of characters available on a standard 80mm receipt line.
 const LINE_CHAR_COUNT = 42;
 
 // Column widths are precisely defined. The sum of widths + spaces between them must be <= LINE_CHAR_COUNT.
-// 18 (Name) + 1 + 4 (Qty) + 1 + 8 (Price) + 1 + 8 (Total) = 41 characters. This fits perfectly.
 const NAME_WIDTH = 18;
 const QTY_WIDTH = 4;
 const PRICE_WIDTH = 8;
@@ -73,7 +70,6 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
   const totalSaved = productSavings + additionalDiscount + loyaltyDiscount;
 
   // --- BUILD THE ENTIRE RECEIPT BODY AS A SINGLE STRING ---
-  // This is the key to perfect alignment. We construct each line and join with newlines.
   const receiptBodyLines = [];
 
   // Header Line
@@ -142,7 +138,6 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
         <p className="text-[10px]">GST No: 33AUBPM5493L1ZA</p>
       </div>
 
-
       {/* --- Bill Meta Info --- */}
       <div className="border-t border-b border-dashed border-black py-1 text-[11px]">
         <MetaRow label="Bill No:" value={sale.billNumber} />
@@ -152,13 +147,17 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
       </div>
 
       {/* --- Pre-formatted text section for guaranteed alignment --- */}
-      <pre className="my-2 whitespace-pre-wrap text-[11px] leading-snug">
-        {receiptContent}
-      </pre>
+      <div className="flex justify-center">
+        <pre className="my-2 whitespace-pre-wrap text-[11px] leading-snug w-[42ch]">
+          {receiptContent}
+        </pre>
+      </div>
+
+
 
       {/* --- "You Saved" Banner --- */}
       {totalSaved > 0 && (
-        <div className="text-center font-bold text-xs bg-black text-white p-1 my-1">
+        <div className="text-center font-bold text-xs text-gray-800 p-1 my-1">
           🎉 You Saved {formatCurrency(totalSaved)}! 🎉
         </div>
       )}
@@ -172,3 +171,4 @@ export const ThermalLayout = React.forwardRef<HTMLDivElement, ThermalLayoutProps
     </div>
   );
 });
+

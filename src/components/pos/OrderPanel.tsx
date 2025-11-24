@@ -1,5 +1,5 @@
 // src/components/pos/OrderPanel.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react'; // ADDED useRef
 import { collection, query, where, getDocs, limit, DocumentData, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { Customer } from '../../types/customer';
@@ -23,12 +23,15 @@ interface OrderPanelProps {
     cart: SaleItem[];
     isSubmitting: boolean;
     onUpdateQuantity: (productId: string, newQuantity: number) => void;
-    onConfirmCheckout: (paymentDetails: { paymentMode: 'Cash' | 'Card' | 'UPI', amountReceived: number | '' }) => void;
+    onConfirmCheckout: (
+        paymentDetails: { paymentMode: 'Cash' | 'Card' | 'UPI', amountReceived: number | '' },
+        andThenPrint?: boolean
+    ) => void;
     selectedCustomer: Customer | null;
     onSelectCustomer: (customer: Customer | null) => void;
     walkInName: string;
     setWalkInName: (name: string) => void;
-    subTotal: number; // This is the final cart total before cart-level discounts
+    subTotal: number;
     loyaltyDiscount: number;
     totalAmount: number;
     loyaltyPointsToUse: number;
@@ -49,12 +52,52 @@ export function OrderPanel(props: OrderPanelProps) {
         additionalDiscountAmount, discountType, onDiscountTypeChange, discountValue, onDiscountValueChange
     } = props;
 
-    // ... customer search and other state remains the same ...
     const [paymentMode, setPaymentMode] = useState<'Cash' | 'Card' | 'UPI'>('Cash');
     const [amountReceived, setAmountReceived] = useState<number | ''>('');
     const [customerSearchTerm, setCustomerSearchTerm] = useState('');
     const [customerResults, setCustomerResults] = useState<Customer[]>([]);
     const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
+    
+    // NEW: Ref for the cash input field
+    const cashInputRef = useRef<HTMLInputElement>(null);
+
+    // MODIFIED: useEffect for Ctrl+P now has proper cash validation
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.ctrlKey && event.key.toLowerCase() === 'p') {
+                event.preventDefault();
+
+                if (isSubmitting || cart.length === 0 || totalAmount <= 0) {
+                    return;
+                }
+
+                let paymentDetails: { paymentMode: 'Cash' | 'Card' | 'UPI', amountReceived: number | '' };
+
+                // Smart validation based on payment mode
+                if (paymentMode === 'Cash') {
+                    if (Number(amountReceived) < totalAmount) {
+                        alert('Please enter cash received. It must be greater than or equal to the total amount.');
+                        // Focus the input field to guide the user
+                        cashInputRef.current?.focus();
+                        return; // Stop the checkout process
+                    }
+                    paymentDetails = { paymentMode, amountReceived: Number(amountReceived) };
+                } else {
+                    // For Card/UPI, assume exact amount is paid
+                    paymentDetails = { paymentMode, amountReceived: totalAmount };
+                }
+                
+                onConfirmCheckout(paymentDetails, true);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+        // ADDED `amountReceived` to dependency array to get the latest value
+    }, [isSubmitting, cart, totalAmount, paymentMode, amountReceived, onConfirmCheckout]);
 
     useEffect(() => {
         const searchCustomers = async () => {
@@ -82,7 +125,7 @@ export function OrderPanel(props: OrderPanelProps) {
         onSelectCustomer(null);
         onLoyaltyPointsChange(0);
     }
-
+    
     const roundOffAmount = totalAmount - (subTotal - additionalDiscountAmount - loyaltyDiscount);
     const productSavings = cart.reduce((acc, item) => acc + (item.mrp - item.priceAtSale) * item.quantity, 0);
     const totalSavings = productSavings + additionalDiscountAmount + loyaltyDiscount;
@@ -95,17 +138,14 @@ export function OrderPanel(props: OrderPanelProps) {
 
     const equivalentPercent = subTotal > 0 ? (additionalDiscountAmount / subTotal * 100) : 0;
     const equivalentFixed = additionalDiscountAmount;
-
-    // **FIXED**: The loyalty points input is now disabled if the cart total is zero,
-    // and the maximum value is correctly enforced by the `useSaleCalculations` hook.
+    
     const maxPointsCanUse = loyaltyDiscount / 5;
 
     return (
         <div className="bg-white border border-gray-200 flex flex-col h-full">
+            {/* ... rest of the component is unchanged ... */}
             <h2 className="text-xl font-bold text-gray-800 p-4 border-b border-gray-200">Current Order</h2>
-            {/* Customer Section */}
             <div className="p-4 border-b border-gray-200">
-              {/* ... customer display logic ... */}
               {selectedCustomer ? (
                     <div className="bg-gray-100 p-3 border border-gray-200">
                         <div className="flex justify-between items-start">
@@ -139,9 +179,7 @@ export function OrderPanel(props: OrderPanelProps) {
                     </div>
                 )}
             </div>
-            {/* Cart Items */}
             <div className="flex-grow overflow-y-auto p-4 space-y-3">
-              {/* ... cart item mapping logic ... */}
               {cart.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-400">
                         <PackagePlus size={48} className="mb-2" />
@@ -167,13 +205,11 @@ export function OrderPanel(props: OrderPanelProps) {
                     </div>
                 ))}
             </div>
-            {/* Billing & Checkout */}
             {cart.length > 0 && (
                 <div className="p-4 border-t border-gray-200 bg-gray-50">
                     <div className="space-y-2 text-sm mb-4">
                         <div className="flex justify-between text-gray-700"><span>Subtotal</span><span>{formatCurrency(subTotal)}</span></div>
                         <div className="border-y border-gray-200 py-3 space-y-2">
-                          {/* ... discount input logic ... */}
                           <label className="block text-sm font-medium text-gray-600">Additional Discount</label>
                             <div className="flex gap-2">
                                 <div className="relative flex-grow">
@@ -187,7 +223,6 @@ export function OrderPanel(props: OrderPanelProps) {
                             </div>
                         </div>
                         {totalSavings > 0 && ( <div className="flex justify-between font-medium text-green-600"> <span>Total Savings</span> <span>- {formatCurrency(totalSavings)}</span> </div> )}
-                        {/* **FIXED**: Loyalty points input now has a max attribute for better UX */}
                         {selectedCustomer && selectedCustomer.loyaltyPoints > 0 && (
                             <div className="flex justify-between items-center text-gray-700">
                                 <span>Use Points ({selectedCustomer.loyaltyPoints})</span>
@@ -201,7 +236,6 @@ export function OrderPanel(props: OrderPanelProps) {
                         {loyaltyDiscount > 0 && (<div className="flex justify-between text-green-600"><span>Loyalty Discount</span><span>- {formatCurrency(loyaltyDiscount)}</span></div>)}
                         <div className="flex justify-between text-gray-600"><span>Round Off</span><span>{roundOffAmount.toFixed(2)}</span></div>
                     </div>
-                    {/* ... total and payment logic ... */}
                     <div className="flex justify-between items-center font-bold text-2xl border-t border-gray-300 pt-3 my-3">
                         <span className="text-gray-800">Total</span>
                         <span className="text-blue-700">{formatCurrency(totalAmount)}</span>
@@ -214,14 +248,21 @@ export function OrderPanel(props: OrderPanelProps) {
                         </div>
                         {paymentMode === 'Cash' && (
                             <div className="mb-4">
-                                <Input type="number" placeholder="Cash Received" value={amountReceived} onChange={e => setAmountReceived(e.target.value === '' ? '' : parseFloat(e.target.value))} />
+                                {/* NEW: Added ref to this input */}
+                                <Input
+                                    ref={cashInputRef}
+                                    type="number"
+                                    placeholder="Cash Received"
+                                    value={amountReceived}
+                                    onChange={e => setAmountReceived(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                />
                                 {Number(amountReceived) >= totalAmount && totalAmount > 0 && (
                                     <p className="text-sm text-center mt-2 text-green-600">Change Due: <span className="font-bold">{formatCurrency(Number(amountReceived) - totalAmount)}</span></p>
                                 )}
                             </div>
                         )}
                         <Button
-                            onClick={() => onConfirmCheckout({ paymentMode, amountReceived })}
+                            onClick={() => onConfirmCheckout({ paymentMode, amountReceived }, false)}
                             disabled={isSubmitting || cart.length === 0}
                             className="w-full text-lg font-bold bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400 transition-colors"
                         >

@@ -1,5 +1,5 @@
 // src/pages/PosPage.tsx
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react'; // ADDED: useEffect, useCallback
 import { collection, writeBatch, doc, serverTimestamp, increment, Timestamp, query, where, getDocs, limit, DocumentData } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../hooks/useAuth';
@@ -15,7 +15,6 @@ import { SaleCompleteOverlay } from '../components/pos/SaleCompleteOverlay';
 import { useSaleCalculations } from '../hooks/useSaleCalculations';
 
 const docToProduct = (doc: DocumentData): Product => {
-    // ... docToProduct converter remains the same
     const data = doc.data();
     return {
         id: doc.id,
@@ -35,7 +34,6 @@ const docToProduct = (doc: DocumentData): Product => {
 };
 
 export default function PosPage() {
-  // **FIXED**: Get the full user profile, including their role and other details.
   const { profile } = useAuth(); 
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -47,6 +45,9 @@ export default function PosPage() {
   const [saleKey, setSaleKey] = useState(1);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState<number | ''>('');
+  
+  // NEW: State to trigger the direct-to-print workflow
+  const [shouldPrintOnSaleComplete, setShouldPrintOnSaleComplete] = useState(false);
 
   const {
     displaySubtotal,
@@ -61,11 +62,10 @@ export default function PosPage() {
     discountType,
     discountValue,
     loyaltyPointsToUse,
-    customer: selectedCustomer, // Pass the selected customer to the hook
+    customer: selectedCustomer,
   });
 
   const handleAddToCart = (product: Product) => {
-    // ... handleAddToCart logic remains the same
     if (product.stock_quantity <= 0) { alert("This product is out of stock!"); return; }
     const existingItem = cart.find(item => item.productId === product.id);
     if (existingItem) {
@@ -90,7 +90,6 @@ export default function PosPage() {
   };
 
   const handleBarcodeScan = async (barcode: string) => {
-    // ... handleBarcodeScan logic remains the same
     try {
       const q = query(collection(db, "products"), where("barcode", "==", barcode), limit(1));
       const snapshot = await getDocs(q);
@@ -101,24 +100,28 @@ export default function PosPage() {
   useBarcodeScanner(handleBarcodeScan, !lastSale);
 
   const handleUpdateQuantity = (productId: string, newQuantity: number) => {
-    // ... handleUpdateQuantity logic remains the same
     if (newQuantity <= 0) { setCart(cart.filter(item => item.productId !== productId)); }
     else { setCart(cart.map(item => item.productId === productId ? { ...item, quantity: newQuantity } : item)); }
   };
 
-  const handleConfirmCheckout = async (paymentDetails: { paymentMode: 'Cash' | 'Card' | 'UPI', amountReceived: number | '' }) => {
+  // MODIFIED: The function now accepts an `andThenPrint` flag.
+  const handleConfirmCheckout = async (
+    paymentDetails: { paymentMode: 'Cash' | 'Card' | 'UPI', amountReceived: number | '' },
+    andThenPrint: boolean = false
+  ) => {
     if (cart.length === 0 || isSubmitting) return;
     if (paymentDetails.paymentMode === 'Cash' && Number(paymentDetails.amountReceived) < totalAmount) {
       alert("Amount received cannot be less than the total amount."); return;
     }
+
+    // NEW: Set the print trigger flag based on how this function was called.
+    setShouldPrintOnSaleComplete(andThenPrint);
+    
     setIsSubmitting(true);
     try {
       const batch = writeBatch(db);
       const productSavings = cart.reduce((acc, item) => acc + (item.mrp - item.priceAtSale) * item.quantity, 0);
-
-      // **FIXED**: Correctly calculate points earned and used
       const pointsEarned = selectedCustomer ? Math.floor(totalAmount / 100) : 0;
-      // The `useSaleCalculations` hook ensures `loyaltyDiscount` is valid, so we derive `pointsUsed` from it.
       const pointsUsed = loyaltyDiscount > 0 ? loyaltyPointsToUse : 0;
 
       const saleDataForFirebase: Omit<Sale, 'id' | 'soldAt'> & { soldAt: any } = {
@@ -138,14 +141,12 @@ export default function PosPage() {
         loyaltyPointsEarned: pointsEarned,
         loyaltyPointsUsed: pointsUsed,
         soldAt: serverTimestamp(),
-        // Use the profile from useAuth to record who sold the item
         soldBy: profile?.email || profile?.uid || 'System',
       };
       const saleRef = doc(collection(db, "sales"));
       batch.set(saleRef, saleDataForFirebase);
       cart.forEach(item => { const productRef = doc(db, "products", item.productId); batch.update(productRef, { stock_quantity: increment(-item.quantity), updatedAt: serverTimestamp() }); });
       
-      // **FIXED**: Correctly update customer's loyalty points
       if (selectedCustomer) {
         const customerRef = doc(db, "customers", selectedCustomer.id);
         const pointsChange = pointsEarned - pointsUsed;
@@ -154,16 +155,47 @@ export default function PosPage() {
 
       await batch.commit();
       const finalSaleObject: Sale = { ...saleDataForFirebase, id: saleRef.id, soldAt: Timestamp.now() };
-      setLastSale(finalSaleObject);
+      
+      // Setting lastSale will trigger the overlay OR our new print effect
+      setLastSale(finalSaleObject); 
+
+      // Reset cart state for the next sale (customer is reset in handleNewSale)
       setCart([]);
       setDiscountValue('');
-      setLoyaltyPointsToUse(0); // Reset points used for next sale
+      setLoyaltyPointsToUse(0);
     } catch (err) { console.error("Checkout failed:", err); alert("An error occurred during checkout. Please try again."); }
     finally { setIsSubmitting(false); }
   };
+  
+  const handlePrint = useCallback(() => {
+    if (receiptRef.current) {
+      printThermalReceipt(receiptRef.current);
+    }
+  }, []);
 
-  const handlePrint = () => { if (receiptRef.current) printThermalReceipt(receiptRef.current); };
-  const handleNewSale = () => { setLastSale(null); setSelectedCustomer(null); setWalkInName(''); setLoyaltyPointsToUse(0); setDiscountValue(''); setSaleKey(prevKey => prevKey + 1); };
+  const handleNewSale = useCallback(() => {
+    setLastSale(null);
+    setSelectedCustomer(null);
+    setWalkInName('');
+    setLoyaltyPointsToUse(0);
+    setDiscountValue('');
+    setSaleKey(prevKey => prevKey + 1);
+  }, []);
+
+  // NEW: This effect handles the direct-to-print workflow
+  useEffect(() => {
+    // It runs when a sale is completed AND the print flag was set
+    if (shouldPrintOnSaleComplete && lastSale && receiptRef.current) {
+      // Trigger the print function
+      handlePrint();
+      
+      // Immediately reset for the next sale, bypassing overlay interaction.
+      handleNewSale(); 
+      
+      // Reset the trigger flag.
+      setShouldPrintOnSaleComplete(false);
+    }
+  }, [lastSale, shouldPrintOnSaleComplete, handlePrint, handleNewSale]);
 
   return (
     <div className="bg-gray-100 text-black min-h-screen font-sans">
@@ -177,7 +209,7 @@ export default function PosPage() {
             cart={cart}
             isSubmitting={isSubmitting}
             onUpdateQuantity={handleUpdateQuantity}
-            onConfirmCheckout={handleConfirmCheckout}
+            onConfirmCheckout={handleConfirmCheckout} // This now supports the direct-print flag
             selectedCustomer={selectedCustomer}
             onSelectCustomer={setSelectedCustomer}
             walkInName={walkInName}
@@ -194,8 +226,19 @@ export default function PosPage() {
             onDiscountValueChange={setDiscountValue} />
         </div>
       </main>
-      {lastSale && (<SaleCompleteOverlay lastSale={lastSale} onPrint={handlePrint} onNewSale={handleNewSale} />)}
-      <div className="hidden">{lastSale && <ThermalLayout ref={receiptRef} sale={lastSale} storeDetails={{ name: "National Mini Mart", address: "123 Main St", phone: "555-123-4567" }} />}</div>
+      
+      {/* MODIFIED: Don't show overlay if we are in the direct-to-print flow */}
+      {lastSale && !shouldPrintOnSaleComplete && (
+        <SaleCompleteOverlay 
+          lastSale={lastSale} 
+          onPrint={handlePrint} 
+          onNewSale={handleNewSale} 
+        />
+      )}
+
+      <div className="hidden">
+        {lastSale && <ThermalLayout ref={receiptRef} sale={lastSale} storeDetails={{ name: "National Mini Mart", address: "123 Main St", phone: "555-123-4567" }} />}
+      </div>
     </div>
   );
 }

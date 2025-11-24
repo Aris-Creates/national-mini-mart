@@ -1,4 +1,5 @@
 // src/components/pos/SaleCompleteOverlay.tsx
+import { useEffect } from 'react';
 import { Sale } from '../../types/sale';
 import { Button } from '../ui/Button';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -11,6 +12,25 @@ interface SaleCompleteOverlayProps {
 }
 
 export function SaleCompleteOverlay({ lastSale, onPrint, onNewSale }: SaleCompleteOverlayProps) {
+    // Add useEffect to handle keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            // Check for Ctrl + P to trigger printing
+            if (event.ctrlKey && event.key.toLowerCase() === 'p') {
+                event.preventDefault(); // Prevent the default browser print dialog
+                onPrint();
+            }
+        };
+
+        // Add event listener when the component mounts
+        window.addEventListener('keydown', handleKeyDown);
+
+        // Clean up the event listener when the component unmounts
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [onPrint]); // Dependency array ensures the effect uses the latest onPrint function
+
     return (
         // --- Light Theme Change: Overlay background ---
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
