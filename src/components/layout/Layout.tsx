@@ -1,41 +1,53 @@
-// src/components/layout/Layout.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Box, Users, History, BarChart2, LogOut } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Box, Users, History, BarChart2, LogOut, PlusCircle, List, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 // Define the structure for a navigation item
 interface NavItemType {
   name: string;
-  href: string;
+  href?: string; // Optional because parent items might just toggle
   icon: React.ElementType;
-  roles: ('admin' | 'employee')[]; // Roles that can see this link
+  roles: ('admin' | 'employee')[];
+  subItems?: { name: string; href: string; icon: React.ElementType }[];
 }
 
-// Define all possible navigation items with their required roles
+// Define navigation items
 const allNavItems: NavItemType[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { name: 'POS', href: '/pos', icon: ShoppingCart, roles: ['admin', 'employee'] },
-  { name: 'Products', href: '/products', icon: Box, roles: ['admin'] },
+  
+  // UPDATED: Products is now a parent item with sub-menus
+  { 
+    name: 'Products', 
+    icon: Box, 
+    roles: ['admin'],
+    subItems: [
+      { name: 'Add New', href: '/products?mode=add', icon: PlusCircle },
+      { name: 'Edit / List', href: '/products?mode=edit', icon: List }
+    ]
+  },
+  
   { name: 'Inventory', href: '/inventory', icon: LayoutDashboard, roles: ['admin', 'employee'] },
   { name: 'Customers', href: '/customers', icon: Users, roles: ['admin', 'employee'] },
   { name: 'Sales History', href: '/sales', icon: History, roles: ['admin', 'employee'] },
   { name: 'Reports', href: '/reports', icon: BarChart2, roles: ['admin'] },
 ];
 
-// A reusable NavLink component for the sidebar
-function NavItem({ href, children, icon: Icon }: { href: string; children: React.ReactNode; icon: React.ElementType }) {
+// Reusable NavLink Component
+function NavLinkItem({ href, children, icon: Icon, isSubItem = false }: { href: string; children: React.ReactNode; icon: React.ElementType; isSubItem?: boolean }) {
   return (
     <NavLink
       to={href}
       className={({ isActive }) =>
-        `flex items-center p-3 text-sm font-medium transition-colors rounded-md ${isActive
-          ? 'bg-zinc-700 text-white' // Active state: A lighter, solid gray
-          : 'text-zinc-400 hover:text-white hover:bg-zinc-700/50' // Inactive: Muted, brightens on hover
-        }`
+        `flex items-center p-3 text-sm font-medium transition-colors rounded-md mb-1 ${
+            isActive
+            ? 'bg-zinc-700 text-white'
+            : 'text-zinc-400 hover:text-white hover:bg-zinc-700/50'
+        } ${isSubItem ? 'pl-11 text-xs' : ''}`
       }
     >
-      <Icon className="mr-3 h-5 w-5" />
+      <Icon className={`${isSubItem ? 'h-4 w-4' : 'h-5 w-5'} mr-3`} />
       {children}
     </NavLink>
   );
@@ -44,11 +56,17 @@ function NavItem({ href, children, icon: Icon }: { href: string; children: React
 const Layout: React.FC = () => {
   const { profile, signOutUser } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  
+  // State to manage expanding/collapsing menus (default open for products if needed)
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({ 'Products': true });
 
   const accessibleNavItems = allNavItems.filter(item =>
     profile && item.roles.includes(profile.role)
   );
+
+  const toggleMenu = (name: string) => {
+    setOpenMenus(prev => ({ ...prev, [name]: !prev[name] }));
+  };
 
   const handleSignOut = async () => {
     try {
@@ -59,28 +77,55 @@ const Layout: React.FC = () => {
     }
   };
 
-  const currentPage = allNavItems.find(item => location.pathname.startsWith(item.href));
-  const pageTitle = currentPage ? currentPage.name : 'Welcome';
-
   return (
     <div className="flex h-screen bg-gray-100">
-
-      {/* --- NEW THEME: Dark Zinc Sidebar --- */}
-      <aside className="w-64 bg-zinc-900 text-zinc-100 p-4 flex flex-col border-r border-zinc-700">
-        <div className="text-center mb-10">
+      {/* Sidebar */}
+      <aside className="w-64 bg-zinc-900 text-zinc-100 p-4 flex flex-col border-r border-zinc-700 overflow-y-auto">
+        <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-white">National Mini Mart</h1>
           <p className="text-sm text-zinc-400">Departmental Stores</p>
         </div>
-        <nav className="flex-grow space-y-2">
+        
+        <nav className="flex-grow space-y-1">
           {accessibleNavItems.map(item => (
-            <NavItem key={item.name} href={item.href} icon={item.icon}>
-              {item.name}
-            </NavItem>
+            <div key={item.name}>
+              {item.subItems ? (
+                // Render Parent with Collapse logic
+                <>
+                  <button
+                    onClick={() => toggleMenu(item.name)}
+                    className="w-full flex items-center justify-between p-3 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-700/50 rounded-md transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <item.icon className="mr-3 h-5 w-5" />
+                      {item.name}
+                    </div>
+                    {openMenus[item.name] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </button>
+                  
+                  {/* Render Sub Items */}
+                  {openMenus[item.name] && (
+                    <div className="mt-1 space-y-1">
+                      {item.subItems.map(sub => (
+                        <NavLinkItem key={sub.name} href={sub.href} icon={sub.icon} isSubItem>
+                          {sub.name}
+                        </NavLinkItem>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Render Standard Link
+                <NavLinkItem href={item.href!} icon={item.icon}>
+                  {item.name}
+                </NavLinkItem>
+              )}
+            </div>
           ))}
         </nav>
 
-        {/* User & Logout Section - Styled for Zinc Theme */}
-        <div className="border-t border-zinc-700 pt-4 space-y-4">
+        {/* Footer User Info */}
+        <div className="border-t border-zinc-700 pt-4 mt-4 space-y-4">
           <div className="px-3">
             <p className="text-xs text-zinc-400">Welcome, {profile?.role}</p>
             <p className="font-semibold text-zinc-100 truncate" title={profile?.email || ''}>
@@ -97,19 +142,13 @@ const Layout: React.FC = () => {
         </div>
       </aside>
 
-      {/* --- Main Content Area (Stays Light) --- */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-
-
-        {/* Child route content - Light Theme */}
         <main className="flex-1 p-6 overflow-y-auto bg-gray-100">
           <Outlet />
         </main>
-
-        {/* --- FOOTER: Themed to match the dark sidebar --- */}
         <footer className="p-4 border-t border-zinc-700 bg-zinc-900 text-center text-sm text-zinc-400 shrink-0">
-          &copy; {new Date().getFullYear()} NMM V2.11.00. All Rights Reserved.<br />
-          Brought to life by <a href="https://arisinnovations.in" target="_blank" rel="noopener noreferrer"> Aris Innovations</a>
+          &copy; {new Date().getFullYear()} NMM V2.12.00. All Rights Reserved.
         </footer>
       </div>
     </div>

@@ -1,4 +1,3 @@
-// src/components/pos/ProductSearchPanel.tsx
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, orderBy, limit, DocumentData, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebase';
@@ -7,29 +6,39 @@ import { Input } from '../ui/Input';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { Search, Loader2 } from 'lucide-react';
 
-// **FIXED**: The converter now correctly reads the new pricing fields.
 const docToProduct = (doc: DocumentData): Product => {
   const data = doc.data();
   return {
     id: doc.id,
     name: data.name || '',
+    category: data.category || '',
+    sub_category: data.sub_category || '',
+    brand: data.brand || '',
     costPrice: data.costPrice || 0,
     mrp: data.mrp || 0,
-    sellingPrice: data.sellingPrice, // Can be undefined or null
+    sellingPrice: data.sellingPrice,
+    is_gst_inclusive: data.is_gst_inclusive ?? true,
+    gst_rate: data.gst_rate || 0,
     stock_quantity: data.stock_quantity || 0,
     min_stock_level: data.min_stock_level || 0,
-    gst_rate: data.gst_rate || 0,
+    unit_type: data.unit_type || 'piece',
+    unit_value: data.unit_value || 1,
+
+    // Free Item
+    hasFreeItem: data.hasFreeItem ?? false,
+    freeProductId: data.freeProductId || '',
+    freeProductName: data.freeProductName || '',
+    freeItemQuantity: data.freeItemQuantity || 1,
+
+    productCode: data.productCode || '',
     hsn_code: data.hsn_code || '',
-    brand: data.brand || '',
     barcode: data.barcode || '',
     createdAt: data.createdAt as Timestamp,
     updatedAt: data.updatedAt as Timestamp,
   };
 };
 
-// **NEW**: A helper to determine the actual price the customer pays.
 const getEffectivePrice = (product: Product): number => {
-  // Use sellingPrice if it's a valid, lower price; otherwise, use MRP.
   return (product.sellingPrice && product.sellingPrice > 0 && product.sellingPrice < product.mrp)
     ? product.sellingPrice
     : product.mrp;
@@ -59,11 +68,8 @@ export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
     fetchAllProducts();
   }, []);
 
-
-  // **MODIFIED**: This effect now searches by both product name and barcode.
   useEffect(() => {
     const performSearch = async () => {
-      // Match the render condition: search when term is 2 chars or more.
       if (searchTerm.trim().length < 2) {
         setSearchResults([]);
         return;
@@ -73,63 +79,34 @@ export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
       try {
         const trimmedTerm = searchTerm.trim();
 
-        // Query 1: Search by barcode prefix
-        const barcodeQuery = query(
-          collection(db, "products"),
-          where('barcode', '>=', trimmedTerm),
-          where('barcode', '<=', trimmedTerm + '\uf8ff'),
-          orderBy('barcode'),
-          limit(10)
-        );
-
-        // Query 2: Search by name prefix (case-sensitive)
-        const nameQuery = query(
-          collection(db, "products"),
-          where('name', '>=', trimmedTerm),
-          where('name', '<=', trimmedTerm + '\uf8ff'),
-          orderBy('name'),
-          limit(10)
-        );
-
-        // Execute both queries in parallel for efficiency
-        const [barcodeSnapshot, nameSnapshot] = await Promise.all([
-          getDocs(barcodeQuery),
-          getDocs(nameQuery),
+        const [barcodeSnapshot, nameSnapshot, codeSnapshot] = await Promise.all([
+          getDocs(query(collection(db, "products"), where('barcode', '>=', trimmedTerm), where('barcode', '<=', trimmedTerm + '\uf8ff'), orderBy('barcode'), limit(10))),
+          getDocs(query(collection(db, "products"), where('name', '>=', trimmedTerm), where('name', '<=', trimmedTerm + '\uf8ff'), orderBy('name'), limit(10))),
+          getDocs(query(collection(db, "products"), where('productCode', '>=', trimmedTerm), where('productCode', '<=', trimmedTerm + '\uf8ff'), orderBy('productCode'), limit(10)))
         ]);
 
-        // Merge and deduplicate results using a Map
         const productsMap = new Map<string, Product>();
-
-        barcodeSnapshot.docs.forEach(doc => {
-          productsMap.set(doc.id, docToProduct(doc));
-        });
-
-        nameSnapshot.docs.forEach(doc => {
-          productsMap.set(doc.id, docToProduct(doc));
-        });
+        codeSnapshot.docs.forEach(doc => productsMap.set(doc.id, docToProduct(doc)));
+        barcodeSnapshot.docs.forEach(doc => productsMap.set(doc.id, docToProduct(doc)));
+        nameSnapshot.docs.forEach(doc => productsMap.set(doc.id, docToProduct(doc)));
 
         setSearchResults(Array.from(productsMap.values()));
 
       } catch (error) {
-        console.error("Error searching products by name or barcode:", error);
+        console.error("Error searching:", error);
         setSearchResults([]);
       } finally {
         setIsSearching(false);
       }
     };
 
-    const debounce = setTimeout(() => {
-      performSearch();
-    }, 300);
-
+    const debounce = setTimeout(() => { performSearch(); }, 300);
     return () => clearTimeout(debounce);
-
   }, [searchTerm]);
 
   const renderProductGrid = (products: Product[]) => (
     <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
       {products.map(product => {
-        // **FIXED**: Use the new helper to get the correct price and check for discounts.
         const effectivePrice = getEffectivePrice(product);
         const hasDiscount = effectivePrice < product.mrp;
 
@@ -138,10 +115,12 @@ export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
             className="bg-white border border-gray-300 p-3 text-left transition-colors hover:bg-gray-100 flex flex-col justify-between h-32 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-100">
             <div>
               <p className="font-semibold text-sm text-gray-800 line-clamp-2">{product.name}</p>
-              <p className="text-xs text-gray-500">{product.brand}</p>
+              <div className="flex justify-between items-center text-xs text-gray-500">
+                <span>{product.brand}</span>
+                {product.productCode && <span className="font-medium text-blue-600">{product.productCode}</span>}
+              </div>
             </div>
 
-            {/* **FIXED**: New rendering logic to show savings */}
             <div>
               {hasDiscount && (
                 <p className="text-xs text-gray-400 line-through">{formatCurrency(product.mrp)}</p>
@@ -165,7 +144,7 @@ export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
       <div className="p-4 border-b border-gray-200">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <Input className="pl-10 text-base" placeholder="Search products by name or scan barcode..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <Input className="pl-10 text-base" placeholder="Search by name, code, or barcode..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
       </div>
       <div className="flex-grow overflow-y-auto p-4">
